@@ -58,6 +58,12 @@ auto drawingTypeToString(DrawingType type) -> string {
             return "drawCoordinateSystem";
         case DRAWING_TYPE_SPLINE:
             return "spline";
+        case DRAWING_TYPE_GAUSS:
+            return "gauss";
+        case DRAWING_TYPE_POLY:
+            return "poly";
+        case DRAWING_TYPE_SINUS:
+            return "sinus";
         default:
             return "";
     }
@@ -87,6 +93,15 @@ auto drawingTypeFromString(const string& type) -> DrawingType {
     }
     if (type == "spline") {
         return DRAWING_TYPE_SPLINE;
+    }
+    if (type == "gauss") {
+        return DRAWING_TYPE_GAUSS;
+    }
+    if (type == "poly") {
+        return DRAWING_TYPE_POLY;
+    }
+    if (type == "sinus") {
+        return DRAWING_TYPE_SINUS;
     }
     return DRAWING_TYPE_DEFAULT;
 }
@@ -127,6 +142,12 @@ auto toolTypeToString(ToolType type) -> string {
             return "drawCoordinateSystem";
         case TOOL_DRAW_SPLINE:
             return "drawSpline";
+        case TOOL_DRAW_GAUSS:
+            return "drawGauss";
+        case TOOL_DRAW_POLY:
+            return "drawPoly";
+        case TOOL_DRAW_SINUS:
+            return "drawSinus";
         case TOOL_FLOATING_TOOLBOX:
             return "showFloatingToolbox";
         default:
@@ -184,6 +205,15 @@ auto toolTypeFromString(const string& type) -> ToolType {
     }
     if (type == "drawSpline") {
         return TOOL_DRAW_SPLINE;
+    }
+    if (type == "drawGauss") {
+        return TOOL_DRAW_GAUSS;
+    }
+    if (type == "drawPoly") {
+        return TOOL_DRAW_POLY;
+    }
+    if (type == "drawSinus") {
+        return TOOL_DRAW_SINUS;
     }
     if (type == "showFloatingToolbox") {
         return TOOL_FLOATING_TOOLBOX;

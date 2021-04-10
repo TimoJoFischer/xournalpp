@@ -24,6 +24,9 @@
 #include "control/tools/SplineHandler.h"
 #include "control/tools/StrokeHandler.h"
 #include "control/tools/VerticalToolHandler.h"
+#include "control/tools/GaussHandler.h"
+#include "control/tools/PolyHandler.h"
+#include "control/tools/SinusHandler.h"
 #include "model/Image.h"
 #include "model/Layer.h"
 #include "model/PageRef.h"
@@ -304,6 +307,12 @@ auto XojPageView::onButtonPressEvent(const PositionInputData& pos) -> bool {
             this->inputHandler = new ArrowHandler(this->xournal, this, getPage());
         } else if (h->getDrawingType() == DRAWING_TYPE_COORDINATE_SYSTEM) {
             this->inputHandler = new CoordinateSystemHandler(this->xournal, this, getPage());
+        } else if (h->getDrawingType() == DRAWING_TYPE_GAUSS) {
+            this->inputHandler = new GaussHandler(this->xournal, this, getPage());
+        } else if (h->getDrawingType() == DRAWING_TYPE_POLY) {
+            this->inputHandler = new PolyHandler(this->xournal, this, getPage());
+        } else if (h->getDrawingType() == DRAWING_TYPE_SINUS) {
+            this->inputHandler = new SinusHandler(this->xournal, this, getPage());
         } else {
             this->inputHandler = new StrokeHandler(this->xournal, this, getPage());
         }

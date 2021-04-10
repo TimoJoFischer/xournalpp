@@ -264,6 +264,18 @@ auto ActionType_fromString(const string& value) -> ActionType {
         return ACTION_TOOL_DRAW_SPLINE;
     }
 
+    if (value == "ACTION_TOOL_DRAW_GAUSS") {
+        return ACTION_TOOL_DRAW_GAUSS;
+    }
+
+    if (value == "ACTION_TOOL_DRAW_POLY") {
+        return ACTION_TOOL_DRAW_POLY;
+    }
+
+    if (value == "ACTION_TOOL_DRAW_SINUS") {
+        return ACTION_TOOL_DRAW_SINUS;
+    }
+
     if (value == "ACTION_TOOL_FLOATING_TOOLBOX") {
         return ACTION_TOOL_FLOATING_TOOLBOX;
     }
@@ -861,6 +873,19 @@ auto ActionType_toString(ActionType value) -> string {
     if (value == ACTION_TOOL_DRAW_SPLINE) {
         return "ACTION_TOOL_DRAW_SPLINE";
     }
+
+    if (value == ACTION_TOOL_DRAW_GAUSS) {
+        return "ACTION_TOOL_DRAW_GAUSS";
+    }
+
+    if (value == ACTION_TOOL_DRAW_POLY) {
+        return "ACTION_TOOL_DRAW_POLY";
+    }
+
+    if (value == ACTION_TOOL_DRAW_SINUS) {
+        return "ACTION_TOOL_DRAW_SINUS";
+    }
+
 
     if (value == ACTION_TOOL_FLOATING_TOOLBOX) {
         return "ACTION_TOOL_FLOATING_TOOLBOX";
