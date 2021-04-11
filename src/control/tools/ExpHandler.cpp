@@ -1,20 +1,20 @@
-#include "PolyHandler.h"
+#include "ExpHandler.h"
 
 #include <cmath>
-
+#include <math.h>
 #include "control/Control.h"
 #include "gui/XournalView.h"
 #include "undo/InsertUndoAction.h"
 
 
-PolyHandler::PolyHandler(XournalView* xournal, XojPageView* redrawable, const PageRef& page, bool flipShift,
+ExpHandler::ExpHandler(XournalView* xournal, XojPageView* redrawable, const PageRef& page, bool flipShift,
                                bool flipControl):
         BaseStrokeHandler(xournal, redrawable, page, flipShift, flipControl) {}
 
-PolyHandler::~PolyHandler() = default;
+ExpHandler::~ExpHandler() = default;
 
 
-void PolyHandler::drawShape(Point& c, const PositionInputData& pos) {
+void ExpHandler::drawShape(Point& c, const PositionInputData& pos) {
     this->currPoint = c;
 
     /**
@@ -31,8 +31,6 @@ void PolyHandler::drawShape(Point& c, const PositionInputData& pos) {
         double width = c.x - this->startPoint.x;
         double height = c.y - this->startPoint.y;
 
-
-        this->modShift = pos.isShiftDown();
         this->modControl = pos.isControlDown();
 
         Settings* settings = xournal->getControl()->getSettings();
@@ -42,10 +40,9 @@ void PolyHandler::drawShape(Point& c, const PositionInputData& pos) {
         }
 
 
-
         double npts = static_cast<int>(std::abs(width * 2.0));
-        double center_x = this->startPoint.x;
-        double center_y = this->startPoint.y;
+        double start_x = this->startPoint.x;
+        double start_y = this->startPoint.y;
 
         if (npts < 24) {
             npts = 24;  // min. number of points
@@ -53,35 +50,20 @@ void PolyHandler::drawShape(Point& c, const PositionInputData& pos) {
 
         // remove previous points
         stroke->deletePointsFrom(0);
-        if (!modShift & !modControl){
-            // x²
+        if(!modControl){
+            //exp(x)
             for (int j = 0; j <= npts; j++) {
-                double x = -2.5 +j*5/npts;
-                double y = x*x;
-                stroke->addPoint(Point(center_x+x*width/2.5,center_y+y*height/6.25));
-            }
-        } else if (!modShift & modControl){
-            // x³
-            for (int j = 0; j <= npts; j++) {
-                double x = -2.5 +j*5/npts;
-                double y = x*x*x;
-                stroke->addPoint(Point(center_x+x*width/2.5,center_y+y*height/15.625));
-            }
-        } else if (modShift & !modControl){
-            // x⁴
-            for (int j = 0; j <= npts; j++) {
-                double x = -2.5 +j*5/npts;
-                double y = x*x*x*x;
-                stroke->addPoint(Point(center_x+x*width/2.5,center_y+y*height/39.0625));
+                double x = -4.0+j*6/npts;
+                double y = exp(x);
+                stroke->addPoint(Point(start_x+x*width/2., start_y+(y-1.)*height/(M_E*M_E-1.)));
             }
         } else {
-            // x⁵
+            //ln(x)
             for (int j = 0; j <= npts; j++) {
-                double x = -2.5 +j*5/npts;
-                double y = x*x*x*x*x;
-                stroke->addPoint(Point(center_x+x*width/2.5,center_y+y*height/97.65625));
+                double x = 0.1+j*6.9/npts;
+                double y = log2(x);
+                stroke->addPoint(Point(start_x+(x-1)*width/6, start_y+y*height/log2(7.)));
             }
         }
-
     }
 }
