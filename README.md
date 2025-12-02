@@ -345,3 +345,23 @@ We support building on three operating systems:
 ## Contributing
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md)
+
+
+
+## Installation
+
+mkdir build
+cd build
+
+cmake .. -G Ninja -DCMAKE_INSTALL_PREFIX=install
+
+cmake --build . -- -j$(nproc)
+
+
+cmake --build . --target install
+
+
+./xournalpp
+
+
+

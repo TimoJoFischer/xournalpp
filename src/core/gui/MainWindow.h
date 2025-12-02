@@ -29,6 +29,7 @@
 #include "ToolbarDefinitions.h"  // for TOOLBAR_DEFINITIONS_LEN
 
 class Control;
+class PositionInputData;
 class Layout;
 class SpinPageAdapter;
 class ScrollHandling;
@@ -113,6 +114,11 @@ public:
     [[maybe_unused]] Menubar* getMenubar() const;
 
     /**
+     * Get the zoom window drawing area widget (may be nullptr if not initialized)
+     */
+    GtkWidget* getZoomWindowDrawingArea() const;
+
+    /**
      * Get the position of the top left corner of screen (X11) or the window (Wayland)
      * relative to the Xournal Widget top left corner
      *
@@ -193,4 +199,68 @@ private:
     xoj::util::WidgetSPtr panedContainerWidget;
     xoj::util::WidgetSPtr mainContentWidget;
     xoj::util::WidgetSPtr sidebarWidget;
+
+    // Zoom window for displaying a scaled view of the canvas
+    GtkWidget* zoomWindowDrawingArea = nullptr;
+    GtkWidget* zoomWindowFrame = nullptr;
+    GtkWidget* zoomWindowBtnMinimize = nullptr;
+    GtkWidget* zoomWindowBtnMaximize = nullptr;
+    GtkWidget* zoomWindowBtnFocusZoom = nullptr;
+    GtkWidget* zoomWindowBtnFocusAll = nullptr;
+    GtkWidget* zoomWindowBtnDrag = nullptr;
+    bool zoomWindowFocusMode = true;  // true = zoom window only, false = full window
+    
+    // Drag button state for moving the indicator
+    bool zoomWindowDragging = false;
+    double zoomWindowDragStartX = 0.0;
+    double zoomWindowDragStartY = 0.0;
+    double zoomWindowDragIndicatorStartX = 0.0;
+    double zoomWindowDragIndicatorStartY = 0.0;
+    
+    // Zoom window transformation parameters (for input handling)
+    double zoomWindowScale = 5.0;       // Magnification factor
+    double zoomWindowIndicatorX = 0.0;   // Top-left X of visible area in page display coords
+    double zoomWindowIndicatorY = 0.0;   // Top-left Y of visible area in page display coords
+    bool zoomWindowInputActive = false;
+    
+    // Stored indicator position (can be moved with keyboard)
+    double zoomIndicatorPosX = 0.0;      // User-controlled X position
+    double zoomIndicatorPosY = 0.0;      // User-controlled Y position
+    size_t zoomWindowLastPage = static_cast<size_t>(-1);  // Track last rendered page to detect external page changes
+    bool zoomWindowInternalPageChange = false;  // Flag to prevent resetting during our own page navigation
+
+    /**
+     * Initialize the zoom window drawing area
+     */
+    void initZoomWindow();
+    
+    /**
+     * Transform zoom window coordinates to page coordinates
+     */
+    PositionInputData transformZoomWindowCoords(double x, double y, GdkEvent* event);
+
+    /**
+     * Callback for drawing the zoom window content
+     */
+    static gboolean onZoomWindowDraw(GtkWidget* widget, cairo_t* cr, MainWindow* self);
+    
+    /**
+     * Callback for button press events in the zoom window
+     */
+    static gboolean onZoomWindowButtonPress(GtkWidget* widget, GdkEventButton* event, MainWindow* self);
+    
+    /**
+     * Callback for button release events in the zoom window
+     */
+    static gboolean onZoomWindowButtonRelease(GtkWidget* widget, GdkEventButton* event, MainWindow* self);
+    
+    /**
+     * Callback for motion events in the zoom window
+     */
+    static gboolean onZoomWindowMotion(GtkWidget* widget, GdkEventMotion* event, MainWindow* self);
+    
+    /**
+     * Callback for key press events in the zoom window
+     */
+    static gboolean onZoomWindowKeyPress(GtkWidget* widget, GdkEventKey* event, MainWindow* self);
 };

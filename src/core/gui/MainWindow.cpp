@@ -1,5 +1,6 @@
 #include "MainWindow.h"
 
+#include <algorithm>
 #include <regex>
 
 #include <gdk-pixbuf/gdk-pixbuf.h>  // for gdk_pixbuf_new_fr...
@@ -11,6 +12,7 @@
 #include "control/Control.h"                            // for Control
 #include "control/DeviceListHelper.h"                   // for getSourceMapping
 #include "control/ScrollHandler.h"                      // for ScrollHandler
+#include "model/Document.h"                             // for Document
 #include "control/actions/ActionDatabase.h"             // for ActionDatabase
 #include "control/jobs/XournalScheduler.h"              // for XournalScheduler
 #include "control/layer/LayerController.h"              // for LayerController
@@ -22,7 +24,10 @@
 #include "gui/PdfFloatingToolbox.h"                     // for PdfFloatingToolbox
 #include "gui/SearchBar.h"                              // for SearchBar
 #include "gui/inputdevices/InputEvents.h"               // for INPUT_DEVICE_TOUC...
+#include "gui/inputdevices/PositionInputData.h"         // for PositionInputData
+#include "gui/inputdevices/DeviceId.h"                  // for DeviceId
 #include "gui/menus/menubar/Menubar.h"                  // for Menubar
+#include "model/Point.h"                                // for Point::NO_PRESSURE
 #include "gui/menus/menubar/ToolbarSelectionSubmenu.h"  // for ToolbarSelectionSubmenu
 #include "gui/scroll/ScrollHandling.h"                  // for ScrollHandling
 #include "gui/sidebar/Sidebar.h"                        // for Sidebar
@@ -43,6 +48,7 @@
 #include "util/raii/CStringWrapper.h"                   // for OwnedCString
 
 #include "GladeSearchpath.h"     // for GladeSearchpath
+#include "PageView.h"            // for XojPageView
 #include "ToolbarDefinitions.h"  // for TOOLBAR_DEFINITIO...
 #include "XournalView.h"         // for XournalView
 #include "config-dev.h"          // for TOOLBAR_CONFIG
@@ -83,6 +89,7 @@ MainWindow::MainWindow(GladeSearchpath* gladeSearchPath, Control* control, GtkAp
     }
 
     initXournalWidget();
+    initZoomWindow();
 
     setSidebarVisible(control->getSettings()->isSidebarVisible());
 
@@ -96,6 +103,9 @@ MainWindow::MainWindow(GladeSearchpath* gladeSearchPath, Control* control, GtkAp
     g_signal_connect(this->window, "notify::maximized", xoj::util::wrap_for_g_callback_v<windowMaximizedCallback>,
                      this);
 #endif
+
+    // Handle zoom window key events at window level (before other handlers)
+    g_signal_connect(this->window, "key-press-event", G_CALLBACK(onZoomWindowKeyPress), this);
 
     // "watch over" all key events
     auto keyPropagate = +[](GtkWidget* w, GdkEvent* e, gpointer) {
@@ -309,6 +319,623 @@ void MainWindow::initXournalWidget() {
     gtk_widget_show_all(winXournal);
 
     scrollHandling->init(this->xournal->getWidget(), this->xournal->getLayout());
+}
+
+void MainWindow::initZoomWindow() {
+    zoomWindowDrawingArea = get("zoomWindowDrawingArea");
+    zoomWindowFrame = get("zoomWindowFrame");
+    zoomWindowBtnMinimize = get("zoomWindowBtnMinimize");
+    zoomWindowBtnMaximize = get("zoomWindowBtnMaximize");
+    zoomWindowBtnFocusZoom = get("zoomWindowBtnFocusZoom");
+    zoomWindowBtnFocusAll = get("zoomWindowBtnFocusAll");
+    zoomWindowBtnDrag = get("zoomWindowBtnDrag");
+    
+    // Set up minimize button
+    if (zoomWindowBtnMinimize && zoomWindowFrame && zoomWindowBtnMaximize) {
+        g_signal_connect(zoomWindowBtnMinimize, "clicked", G_CALLBACK(+[](GtkButton*, gpointer data) {
+            auto* self = static_cast<MainWindow*>(data);
+            gtk_widget_hide(self->zoomWindowFrame);
+            gtk_widget_show(self->zoomWindowBtnMaximize);
+            // Hide the indicator on the main canvas
+            if (self->xournal) {
+                gtk_xournal_set_zoom_indicator(self->xournal->getWidget(), false, 0, 0, 0, 0);
+            }
+        }), this);
+    }
+    
+    // Set up maximize button
+    if (zoomWindowBtnMaximize && zoomWindowFrame) {
+        g_signal_connect(zoomWindowBtnMaximize, "clicked", G_CALLBACK(+[](GtkButton*, gpointer data) {
+            auto* self = static_cast<MainWindow*>(data);
+            gtk_widget_show(self->zoomWindowFrame);
+            gtk_widget_hide(self->zoomWindowBtnMaximize);
+        }), this);
+    }
+    
+    // Set up focus toggle buttons (radio-button style behavior)
+    if (zoomWindowBtnFocusZoom && zoomWindowBtnFocusAll) {
+        g_signal_connect(zoomWindowBtnFocusZoom, "toggled", G_CALLBACK(+[](GtkToggleButton* btn, gpointer data) {
+            auto* self = static_cast<MainWindow*>(data);
+            if (gtk_toggle_button_get_active(btn)) {
+                self->zoomWindowFocusMode = true;
+                gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(self->zoomWindowBtnFocusAll), FALSE);
+            }
+        }), this);
+        
+        g_signal_connect(zoomWindowBtnFocusAll, "toggled", G_CALLBACK(+[](GtkToggleButton* btn, gpointer data) {
+            auto* self = static_cast<MainWindow*>(data);
+            if (gtk_toggle_button_get_active(btn)) {
+                self->zoomWindowFocusMode = false;
+                gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(self->zoomWindowBtnFocusZoom), FALSE);
+            }
+        }), this);
+    }
+    
+    // Set up drag button for moving the indicator
+    if (zoomWindowBtnDrag) {
+        gtk_widget_add_events(zoomWindowBtnDrag, 
+                              GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK | 
+                              GDK_POINTER_MOTION_MASK | GDK_BUTTON_MOTION_MASK);
+        
+        g_signal_connect(zoomWindowBtnDrag, "button-press-event", G_CALLBACK(+[](GtkWidget*, GdkEventButton* event, gpointer data) -> gboolean {
+            auto* self = static_cast<MainWindow*>(data);
+            if (event->button == 1) {
+                self->zoomWindowDragging = true;
+                self->zoomWindowDragStartX = event->x_root;
+                self->zoomWindowDragStartY = event->y_root;
+                self->zoomWindowDragIndicatorStartX = self->zoomIndicatorPosX;
+                self->zoomWindowDragIndicatorStartY = self->zoomIndicatorPosY;
+                return TRUE;
+            }
+            return FALSE;
+        }), this);
+        
+        g_signal_connect(zoomWindowBtnDrag, "button-release-event", G_CALLBACK(+[](GtkWidget*, GdkEventButton* event, gpointer data) -> gboolean {
+            auto* self = static_cast<MainWindow*>(data);
+            if (event->button == 1 && self->zoomWindowDragging) {
+                self->zoomWindowDragging = false;
+                return TRUE;
+            }
+            return FALSE;
+        }), this);
+        
+        g_signal_connect(zoomWindowBtnDrag, "motion-notify-event", G_CALLBACK(+[](GtkWidget*, GdkEventMotion* event, gpointer data) -> gboolean {
+            auto* self = static_cast<MainWindow*>(data);
+            if (!self->zoomWindowDragging || !self->xournal) {
+                return FALSE;
+            }
+            
+            // Calculate delta from drag start position
+            double deltaX = event->x_root - self->zoomWindowDragStartX;
+            double deltaY = event->y_root - self->zoomWindowDragStartY;
+            
+            // Update indicator position (inverted: dragging right moves indicator left)
+            double newPosX = self->zoomWindowDragIndicatorStartX - deltaX;
+            double newPosY = self->zoomWindowDragIndicatorStartY - deltaY;
+            
+            // Get page bounds for clamping
+            size_t currentPage = self->xournal->getCurrentPage();
+            if (currentPage != npos) {
+                XojPageView* pageView = self->xournal->getViewFor(currentPage);
+                if (pageView) {
+                    double pageDisplayWidth = pageView->getDisplayWidthDouble();
+                    double pageDisplayHeight = pageView->getDisplayHeightDouble();
+                    
+                    int zoomWidth = gtk_widget_get_allocated_width(self->zoomWindowDrawingArea);
+                    int zoomHeight = gtk_widget_get_allocated_height(self->zoomWindowDrawingArea);
+                    if (zoomWidth <= 0) zoomWidth = 533;
+                    if (zoomHeight <= 0) zoomHeight = 300;
+                    
+                    double maxX = std::max(0.0, pageDisplayWidth - zoomWidth);
+                    double maxY = std::max(0.0, pageDisplayHeight - zoomHeight);
+                    
+                    // Clamp to valid range
+                    self->zoomIndicatorPosX = std::max(0.0, std::min(newPosX, maxX));
+                    self->zoomIndicatorPosY = std::max(0.0, std::min(newPosY, maxY));
+                    
+                    // Ensure the indicator rectangle is visible in the main view
+                    int pageX = pageView->getX();
+                    int pageY = pageView->getY();
+                    int indicatorAbsX = pageX + static_cast<int>(self->zoomIndicatorPosX);
+                    int indicatorAbsY = pageY + static_cast<int>(self->zoomIndicatorPosY);
+                    self->xournal->ensureRectIsVisible(indicatorAbsX, indicatorAbsY, zoomWidth, zoomHeight);
+                    
+                    // Redraw the zoom window
+                    gtk_widget_queue_draw(self->zoomWindowDrawingArea);
+                }
+            }
+            
+            return TRUE;
+        }), this);
+    }
+    
+    if (zoomWindowDrawingArea) {
+        g_signal_connect(zoomWindowDrawingArea, "draw", G_CALLBACK(onZoomWindowDraw), this);
+        
+        // Enable events for input handling
+        gtk_widget_add_events(zoomWindowDrawingArea, 
+                              GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK | 
+                              GDK_POINTER_MOTION_MASK | GDK_BUTTON_MOTION_MASK |
+                              GDK_KEY_PRESS_MASK | GDK_ENTER_NOTIFY_MASK);
+        
+        // Make the widget focusable to receive keyboard events
+        gtk_widget_set_can_focus(zoomWindowDrawingArea, TRUE);
+        
+        // Connect input event handlers
+        g_signal_connect(zoomWindowDrawingArea, "button-press-event", G_CALLBACK(onZoomWindowButtonPress), this);
+        g_signal_connect(zoomWindowDrawingArea, "button-release-event", G_CALLBACK(onZoomWindowButtonRelease), this);
+        g_signal_connect(zoomWindowDrawingArea, "motion-notify-event", G_CALLBACK(onZoomWindowMotion), this);
+        g_signal_connect(zoomWindowDrawingArea, "key-press-event", G_CALLBACK(onZoomWindowKeyPress), this);
+        
+        // Sync cursor from main view when entering the zoom window
+        g_signal_connect(zoomWindowDrawingArea, "enter-notify-event", G_CALLBACK(+[](GtkWidget* widget, GdkEventCrossing*, gpointer data) -> gboolean {
+            auto* self = static_cast<MainWindow*>(data);
+            if (self->xournal) {
+                GdkWindow* mainWindow = gtk_widget_get_window(self->xournal->getWidget());
+                GdkWindow* zoomWindow = gtk_widget_get_window(widget);
+                if (mainWindow && zoomWindow) {
+                    GdkCursor* cursor = gdk_window_get_cursor(mainWindow);
+                    gdk_window_set_cursor(zoomWindow, cursor);
+                }
+            }
+            return FALSE;
+        }), this);
+        
+        // Set up a timer to periodically refresh the zoom window and update the indicator
+        g_timeout_add(100, +[](gpointer data) -> gboolean {
+            auto* self = static_cast<MainWindow*>(data);
+            // Check if zoom window frame is visible (not minimized)
+            bool zoomVisible = self->zoomWindowFrame && gtk_widget_get_visible(self->zoomWindowFrame) &&
+                               self->zoomWindowDrawingArea && gtk_widget_get_visible(self->zoomWindowDrawingArea);
+            if (zoomVisible) {
+                gtk_widget_queue_draw(self->zoomWindowDrawingArea);
+                
+                // Update the zoom indicator rectangle on the main canvas
+                if (self->xournal) {
+                    size_t currentPage = self->xournal->getCurrentPage();
+                    if (currentPage != npos) {
+                        XojPageView* pageView = self->xournal->getViewFor(currentPage);
+                        if (pageView) {
+                            double pageDisplayWidth = pageView->getDisplayWidthDouble();
+                            double pageDisplayHeight = pageView->getDisplayHeightDouble();
+                            
+                            // Zoom window dimensions (use defaults if not yet allocated)
+                            int zoomWidth = gtk_widget_get_allocated_width(self->zoomWindowDrawingArea);
+                            int zoomHeight = gtk_widget_get_allocated_height(self->zoomWindowDrawingArea);
+                            if (zoomWidth <= 0) zoomWidth = 533;
+                            if (zoomHeight <= 0) zoomHeight = 300;
+                            
+                            // No additional zoom factor - 1:1 with the main view for sharp rendering
+                            // The visible area in page display coordinates equals the zoom window size
+                            double indicatorWidth = static_cast<double>(zoomWidth);
+                            double indicatorHeight = static_cast<double>(zoomHeight);
+                            
+                            // Use stored position (can be moved with arrow keys)
+                            double indicatorX = self->zoomIndicatorPosX;
+                            double indicatorY = self->zoomIndicatorPosY;
+                            
+                            // Clamp to page bounds
+                            indicatorX = std::max(0.0, std::min(indicatorX, pageDisplayWidth - indicatorWidth));
+                            indicatorY = std::max(0.0, std::min(indicatorY, pageDisplayHeight - indicatorHeight));
+                            
+                            // Add page offset for drawing on the xournal widget
+                            double drawX = indicatorX + pageView->getX();
+                            double drawY = indicatorY + pageView->getY();
+                            
+                            gtk_xournal_set_zoom_indicator(self->xournal->getWidget(), true,
+                                                          drawX, drawY, indicatorWidth, indicatorHeight);
+                        }
+                    }
+                }
+            } else {
+                // Hide the indicator when zoom window is not visible
+                if (self->xournal) {
+                    gtk_xournal_set_zoom_indicator(self->xournal->getWidget(), false, 0, 0, 0, 0);
+                }
+            }
+            return G_SOURCE_CONTINUE;
+        }, this);
+    }
+}
+
+gboolean MainWindow::onZoomWindowDraw(GtkWidget* widget, cairo_t* cr, MainWindow* self) {
+    if (!self->xournal) {
+        return FALSE;
+    }
+
+    // Get the current page
+    size_t currentPage = self->xournal->getCurrentPage();
+    if (currentPage == npos) {
+        return FALSE;
+    }
+
+    // Reset indicator to top-left when page changes externally (not via our navigation)
+    bool needsScrollUpdate = false;
+    if (self->zoomWindowLastPage != currentPage) {
+        if (!self->zoomWindowInternalPageChange) {
+            // External page change - reset to top-left
+            self->zoomIndicatorPosX = 0.0;
+            self->zoomIndicatorPosY = 0.0;
+        } else {
+            // Internal page change - we need to scroll the main view to show the indicator
+            needsScrollUpdate = true;
+        }
+        self->zoomWindowLastPage = currentPage;
+        self->zoomWindowInternalPageChange = false;  // Clear the flag
+    }
+
+    XojPageView* pageView = self->xournal->getViewFor(currentPage);
+    if (!pageView) {
+        return FALSE;
+    }
+
+    // Get the dimensions of the zoom window
+    int zoomWidth = gtk_widget_get_allocated_width(widget);
+    int zoomHeight = gtk_widget_get_allocated_height(widget);
+
+    // Get the page dimensions (display size includes current xournal zoom)
+    double pageDisplayWidth = pageView->getDisplayWidthDouble();
+    double pageDisplayHeight = pageView->getDisplayHeightDouble();
+    double xournalZoom = self->xournal->getZoom();
+
+    if (pageDisplayWidth <= 0 || pageDisplayHeight <= 0) {
+        return FALSE;
+    }
+
+    // For sharp rendering, we render at 1:1 with the buffer (no additional magnification)
+    // This means the zoom window shows content at the same zoom level as the main view
+    // The visible area equals the zoom window size in page display coordinates
+    double visibleWidth = zoomWidth;
+    double visibleHeight = zoomHeight;
+
+    // Use stored indicator position (can be moved with arrow keys)
+    double indicatorX = self->zoomIndicatorPosX;
+    double indicatorY = self->zoomIndicatorPosY;
+
+    // Clamp to page bounds
+    indicatorX = std::max(0.0, std::min(indicatorX, pageDisplayWidth - visibleWidth));
+    indicatorY = std::max(0.0, std::min(indicatorY, pageDisplayHeight - visibleHeight));
+    
+    // Update stored position with clamped values (important when navigating to new pages)
+    self->zoomIndicatorPosX = indicatorX;
+    self->zoomIndicatorPosY = indicatorY;
+    
+    // Scroll main view to show indicator if we just changed pages internally
+    if (needsScrollUpdate) {
+        int pageX = pageView->getX();
+        int pageY = pageView->getY();
+        int indicatorAbsX = pageX + static_cast<int>(indicatorX);
+        int indicatorAbsY = pageY + static_cast<int>(indicatorY);
+        self->xournal->ensureRectIsVisible(indicatorAbsX, indicatorAbsY, zoomWidth, zoomHeight);
+    }
+
+    // Store transformation parameters for input handling (no additional scaling)
+    self->zoomWindowScale = 1.0;
+    self->zoomWindowIndicatorX = indicatorX;
+    self->zoomWindowIndicatorY = indicatorY;
+
+    // Draw background
+    cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);
+    cairo_paint(cr);
+
+    // Calculate the area in page coordinates
+    double sourceXPage = indicatorX / xournalZoom;
+    double sourceYPage = indicatorY / xournalZoom;
+
+    cairo_save(cr);
+    
+    // Clip to the zoom window area
+    cairo_rectangle(cr, 0, 0, zoomWidth, zoomHeight);
+    cairo_clip(cr);
+    
+    // Render at 1:1 with the buffer (at xournalZoom level)
+    // This keeps the content sharp because we're not scaling up a lower-res buffer
+    cairo_scale(cr, xournalZoom, xournalZoom);
+    cairo_translate(cr, -sourceXPage, -sourceYPage);
+    
+    // paintPage scales by xournalZoom internally, so we undo our scale
+    cairo_scale(cr, 1.0 / xournalZoom, 1.0 / xournalZoom);
+    pageView->paintPage(cr, nullptr);
+    
+    cairo_restore(cr);
+
+    return TRUE;
+}
+
+PositionInputData MainWindow::transformZoomWindowCoords(double x, double y, GdkEvent* event) {
+    PositionInputData pos = {};
+    
+    // Transform from zoom window coordinates to page display coordinates
+    // Zoom window shows the area starting at (indicatorX, indicatorY) magnified by zoomWindowScale
+    // So: zoomWindowCoord / scale + indicatorPos = pageDisplayCoord
+    pos.x = x / zoomWindowScale + zoomWindowIndicatorX;
+    pos.y = y / zoomWindowScale + zoomWindowIndicatorY;
+    pos.pressure = Point::NO_PRESSURE;
+    
+    GdkDevice* device = gdk_event_get_source_device(event);
+    if (device) {
+        pos.deviceId = DeviceId(device);
+    }
+    
+    pos.timestamp = gdk_event_get_time(event);
+    
+    GdkModifierType state;
+    if (gdk_event_get_state(event, &state)) {
+        pos.state = state;
+    } else {
+        pos.state = static_cast<GdkModifierType>(0);
+    }
+    
+    return pos;
+}
+
+gboolean MainWindow::onZoomWindowButtonPress(GtkWidget* widget, GdkEventButton* event, MainWindow* self) {
+    if (!self->xournal || event->button != 1) {
+        return FALSE;
+    }
+    
+    size_t currentPage = self->xournal->getCurrentPage();
+    if (currentPage == npos) {
+        return FALSE;
+    }
+    
+    XojPageView* pageView = self->xournal->getViewFor(currentPage);
+    if (!pageView) {
+        return FALSE;
+    }
+    
+    PositionInputData pos = self->transformZoomWindowCoords(event->x, event->y, reinterpret_cast<GdkEvent*>(event));
+    
+    // Check if the click is within the page bounds
+    if (pos.x >= 0 && pos.y >= 0 && 
+        pos.x <= pageView->getDisplayWidth() && pos.y <= pageView->getDisplayHeight()) {
+        self->zoomWindowInputActive = true;
+        pageView->onButtonPressEvent(pos);
+        gtk_widget_queue_draw(widget);
+        return TRUE;
+    }
+    
+    return FALSE;
+}
+
+gboolean MainWindow::onZoomWindowButtonRelease(GtkWidget* widget, GdkEventButton* event, MainWindow* self) {
+    if (!self->xournal || !self->zoomWindowInputActive || event->button != 1) {
+        return FALSE;
+    }
+    
+    size_t currentPage = self->xournal->getCurrentPage();
+    if (currentPage == npos) {
+        self->zoomWindowInputActive = false;
+        return FALSE;
+    }
+    
+    XojPageView* pageView = self->xournal->getViewFor(currentPage);
+    if (!pageView) {
+        self->zoomWindowInputActive = false;
+        return FALSE;
+    }
+    
+    PositionInputData pos = self->transformZoomWindowCoords(event->x, event->y, reinterpret_cast<GdkEvent*>(event));
+    pageView->onButtonReleaseEvent(pos);
+    
+    self->zoomWindowInputActive = false;
+    gtk_widget_queue_draw(widget);
+    return TRUE;
+}
+
+gboolean MainWindow::onZoomWindowMotion(GtkWidget* widget, GdkEventMotion* event, MainWindow* self) {
+    // Always sync cursor from main view when moving in the zoom window
+    if (self->xournal) {
+        GdkWindow* mainWindow = gtk_widget_get_window(self->xournal->getWidget());
+        GdkWindow* zoomWindow = gtk_widget_get_window(widget);
+        if (mainWindow && zoomWindow) {
+            GdkCursor* cursor = gdk_window_get_cursor(mainWindow);
+            gdk_window_set_cursor(zoomWindow, cursor);
+        }
+    }
+    
+    if (!self->xournal || !self->zoomWindowInputActive) {
+        return FALSE;
+    }
+    
+    size_t currentPage = self->xournal->getCurrentPage();
+    if (currentPage == npos) {
+        return FALSE;
+    }
+    
+    XojPageView* pageView = self->xournal->getViewFor(currentPage);
+    if (!pageView) {
+        return FALSE;
+    }
+    
+    PositionInputData pos = self->transformZoomWindowCoords(event->x, event->y, reinterpret_cast<GdkEvent*>(event));
+    pageView->onMotionNotifyEvent(pos);
+    
+    gtk_widget_queue_draw(widget);
+    return TRUE;
+}
+
+gboolean MainWindow::onZoomWindowKeyPress(GtkWidget* widget, GdkEventKey* event, MainWindow* self) {
+    // Only handle if zoom window is visible
+    if (!self->zoomWindowDrawingArea || !gtk_widget_get_visible(self->zoomWindowDrawingArea)) {
+        return FALSE;
+    }
+    
+    // Use Alt+Arrow keys for movement (less likely to conflict)
+    if (!(event->state & GDK_MOD1_MASK)) {  // GDK_MOD1_MASK is Alt
+        return FALSE;
+    }
+    
+    // Get current page bounds for clamping
+    if (!self->xournal || !self->control) {
+        return FALSE;
+    }
+    
+    size_t currentPage = self->xournal->getCurrentPage();
+    size_t pageCount = self->control->getDocument()->getPageCount();
+    if (currentPage == npos || pageCount == 0) {
+        return FALSE;
+    }
+    
+    XojPageView* pageView = self->xournal->getViewFor(currentPage);
+    if (!pageView) {
+        return FALSE;
+    }
+    
+    double pageDisplayWidth = pageView->getDisplayWidthDouble();
+    double pageDisplayHeight = pageView->getDisplayHeightDouble();
+    
+    // Zoom window dimensions
+    int zoomWidth = gtk_widget_get_allocated_width(self->zoomWindowDrawingArea);
+    int zoomHeight = gtk_widget_get_allocated_height(self->zoomWindowDrawingArea);
+    if (zoomWidth <= 0) zoomWidth = 533;
+    if (zoomHeight <= 0) zoomHeight = 300;
+    
+    // Maximum position (so the indicator stays within page bounds)
+    double maxX = std::max(0.0, pageDisplayWidth - zoomWidth);
+    double maxY = std::max(0.0, pageDisplayHeight - zoomHeight);
+    
+    // Movement step size in pixels (hold Shift for larger steps)
+    double step = (event->state & GDK_SHIFT_MASK) ? 100.0 : 20.0;
+    // Vertical step when wrapping (half the zoom window height)
+    double wrapStepY = zoomHeight / 2.0;
+    
+    bool handled = false;
+    bool pageChanged = false;
+    
+    switch (event->keyval) {
+        case GDK_KEY_Left:
+            self->zoomIndicatorPosX -= step;
+            // Wrap to right side and move up if going past left edge
+            if (self->zoomIndicatorPosX < 0) {
+                self->zoomIndicatorPosX = maxX;
+                self->zoomIndicatorPosY -= wrapStepY;
+                // If we're past top, go to previous page (bottom-right)
+                if (self->zoomIndicatorPosY < 0 && currentPage > 0) {
+                    // Mark as internal page change to prevent draw from resetting position
+                    self->zoomWindowInternalPageChange = true;
+                    // Use large values - the draw function will clamp to actual page bounds
+                    self->zoomIndicatorPosX = 100000.0;
+                    self->zoomIndicatorPosY = 100000.0;
+                    self->control->getScrollHandler()->scrollToPage(currentPage - 1, XojPdfRectangle{});
+                    pageChanged = true;
+                }
+            }
+            handled = true;
+            break;
+        case GDK_KEY_Right:
+            self->zoomIndicatorPosX += step;
+            // Wrap to left side and move down if going past right edge
+            if (self->zoomIndicatorPosX > maxX) {
+                self->zoomIndicatorPosX = 0;
+                self->zoomIndicatorPosY += wrapStepY;
+                // If we're past bottom, go to next page (top-left)
+                if (self->zoomIndicatorPosY > maxY && currentPage < pageCount - 1) {
+                    // Mark as internal page change to prevent draw from resetting position
+                    self->zoomWindowInternalPageChange = true;
+                    self->zoomIndicatorPosX = 0;
+                    self->zoomIndicatorPosY = 0;
+                    self->control->getScrollHandler()->scrollToPage(currentPage + 1, XojPdfRectangle{});
+                    pageChanged = true;
+                }
+            }
+            handled = true;
+            break;
+        case GDK_KEY_Up:
+            self->zoomIndicatorPosY -= step;
+            // If past top, go to previous page (bottom, same X)
+            if (self->zoomIndicatorPosY < 0 && currentPage > 0) {
+                // Mark as internal page change to prevent draw from resetting position
+                self->zoomWindowInternalPageChange = true;
+                // Use large value - the draw function will clamp to actual page bounds
+                self->zoomIndicatorPosY = 100000.0;
+                self->control->getScrollHandler()->scrollToPage(currentPage - 1, XojPdfRectangle{});
+                pageChanged = true;
+            }
+            handled = true;
+            break;
+        case GDK_KEY_Down:
+            self->zoomIndicatorPosY += step;
+            // If past bottom, go to next page (top, same X)
+            if (self->zoomIndicatorPosY > maxY && currentPage < pageCount - 1) {
+                // Mark as internal page change to prevent draw from resetting position
+                self->zoomWindowInternalPageChange = true;
+                self->zoomIndicatorPosY = 0;  // Go to top of next page
+                self->control->getScrollHandler()->scrollToPage(currentPage + 1, XojPdfRectangle{});
+                pageChanged = true;
+            }
+            handled = true;
+            break;
+        case GDK_KEY_Home:
+            // Alt+Home: Jump to top-left
+            self->zoomIndicatorPosX = 0;
+            self->zoomIndicatorPosY = 0;
+            handled = true;
+            break;
+        case GDK_KEY_End:
+            // Alt+End: Jump to bottom-right
+            self->zoomIndicatorPosX = maxX;
+            self->zoomIndicatorPosY = maxY;
+            handled = true;
+            break;
+        case GDK_KEY_Page_Up:
+            // Alt+PageUp: Go to previous page
+            if (currentPage > 0) {
+                self->zoomWindowInternalPageChange = true;
+                self->zoomIndicatorPosX = 0;
+                self->zoomIndicatorPosY = 0;
+                self->control->getScrollHandler()->scrollToPage(currentPage - 1, XojPdfRectangle{});
+                pageChanged = true;
+            }
+            handled = true;
+            break;
+        case GDK_KEY_Page_Down:
+            // Alt+PageDown: Go to next page
+            if (currentPage < pageCount - 1) {
+                self->zoomWindowInternalPageChange = true;
+                self->zoomIndicatorPosX = 0;
+                self->zoomIndicatorPosY = 0;
+                self->control->getScrollHandler()->scrollToPage(currentPage + 1, XojPdfRectangle{});
+                pageChanged = true;
+            }
+            handled = true;
+            break;
+        default:
+            break;
+    }
+    
+    if (handled) {
+        // Re-get maxX/maxY if page changed (new page may have different dimensions)
+        if (pageChanged) {
+            // The flag zoomWindowInternalPageChange is set, so the draw function
+            // won't reset our position when it detects the page change.
+            // Just clamp to reasonable values here.
+            self->zoomIndicatorPosX = std::max(0.0, self->zoomIndicatorPosX);
+            self->zoomIndicatorPosY = std::max(0.0, self->zoomIndicatorPosY);
+        } else {
+            // Clamp position to valid range
+            self->zoomIndicatorPosX = std::max(0.0, std::min(self->zoomIndicatorPosX, maxX));
+            self->zoomIndicatorPosY = std::max(0.0, std::min(self->zoomIndicatorPosY, maxY));
+        }
+        
+        // Ensure the indicator rectangle is visible in the main view
+        // Note: when page changed, pageView is the old page, but ensureRectIsVisible
+        // will be called again by the timer with correct coordinates
+        if (!pageChanged) {
+            int pageX = pageView->getX();
+            int pageY = pageView->getY();
+            int indicatorAbsX = pageX + static_cast<int>(self->zoomIndicatorPosX);
+            int indicatorAbsY = pageY + static_cast<int>(self->zoomIndicatorPosY);
+            self->xournal->ensureRectIsVisible(indicatorAbsX, indicatorAbsY, zoomWidth, zoomHeight);
+        }
+        
+        if (self->zoomWindowDrawingArea) {
+            gtk_widget_queue_draw(self->zoomWindowDrawingArea);
+        }
+        return TRUE;
+    }
+    
+    return FALSE;
 }
 
 void MainWindow::setGtkTouchscreenScrollingForDeviceMapping() {
@@ -626,6 +1253,8 @@ auto MainWindow::setFullscreen(bool enabled) const -> void {
 auto MainWindow::isDarkTheme() const -> bool { return this->darkMode; }
 
 auto MainWindow::getXournal() const -> XournalView* { return xournal.get(); }
+
+auto MainWindow::getZoomWindowDrawingArea() const -> GtkWidget* { return zoomWindowDrawingArea; }
 
 auto MainWindow::windowMaximizedCallback(GObject* window, GParamSpec*, MainWindow* win) -> void {
     win->setMaximized(gtk_window_is_maximized(GTK_WINDOW(window)));

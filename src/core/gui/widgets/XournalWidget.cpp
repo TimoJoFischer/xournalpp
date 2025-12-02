@@ -81,6 +81,20 @@ static void gtk_xournal_class_init(GtkXournalClass* cptr) {
     G_OBJECT_CLASS(cptr)->dispose = gtk_xournal_dispose;
 }
 
+void gtk_xournal_set_zoom_indicator(GtkWidget* widget, bool show, double x, double y, double width, double height) {
+    g_return_if_fail(widget != nullptr);
+    g_return_if_fail(GTK_IS_XOURNAL(widget));
+    
+    GtkXournal* xournal = GTK_XOURNAL(widget);
+    xournal->showZoomIndicator = show;
+    xournal->zoomIndicatorX = x;
+    xournal->zoomIndicatorY = y;
+    xournal->zoomIndicatorWidth = width;
+    xournal->zoomIndicatorHeight = height;
+    
+    gtk_widget_queue_draw(widget);
+}
+
 auto gtk_xournal_get_visible_area(GtkWidget* widget, const XojPageView* p) -> xoj::util::Rectangle<double>* {
     g_return_val_if_fail(widget != nullptr, nullptr);
     g_return_val_if_fail(GTK_IS_XOURNAL(widget), nullptr);
@@ -304,6 +318,26 @@ static auto gtk_xournal_draw(GtkWidget* widget, cairo_t* cr) -> gboolean {
 
     if (recolor) {
         recolor->recolorCurrentCairoRegion(cr);
+    }
+
+    // Draw zoom window indicator rectangle
+    if (xournal->showZoomIndicator) {
+        cairo_save(cr);
+        
+        // Draw blue border rectangle
+        cairo_set_source_rgb(cr, 0.0, 0.4, 1.0);  // Blue color
+        cairo_set_line_width(cr, 2.0);
+        cairo_rectangle(cr, xournal->zoomIndicatorX, xournal->zoomIndicatorY,
+                        xournal->zoomIndicatorWidth, xournal->zoomIndicatorHeight);
+        cairo_stroke(cr);
+        
+        // Draw semi-transparent fill
+        cairo_set_source_rgba(cr, 0.0, 0.4, 1.0, 0.1);  // Light blue fill
+        cairo_rectangle(cr, xournal->zoomIndicatorX, xournal->zoomIndicatorY,
+                        xournal->zoomIndicatorWidth, xournal->zoomIndicatorHeight);
+        cairo_fill(cr);
+        
+        cairo_restore(cr);
     }
 
     return true;
