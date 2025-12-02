@@ -360,12 +360,14 @@ void MainWindow::initXournalWidget() {
                     double newIndicatorX = motionEvent->x - xoj->indicatorDragOffsetX;
                     double newIndicatorY = motionEvent->y - xoj->indicatorDragOffsetY;
                     
-                    // Get zoom window dimensions
-                    double zoomFactor = 1.5;
+                    // Get zoom window dimensions from settings
+                    double zoomFactor = self->getZoomWindowFactor();
+                    int defaultWidth, defaultHeight;
+                    self->getZoomWindowSize(defaultWidth, defaultHeight);
                     int zoomWidth = gtk_widget_get_allocated_width(self->zoomWindowDrawingArea);
                     int zoomHeight = gtk_widget_get_allocated_height(self->zoomWindowDrawingArea);
-                    if (zoomWidth <= 0) zoomWidth = 533;
-                    if (zoomHeight <= 0) zoomHeight = 300;
+                    if (zoomWidth <= 0) zoomWidth = defaultWidth;
+                    if (zoomHeight <= 0) zoomHeight = defaultHeight;
                     double visibleWidth = zoomWidth / zoomFactor;
                     double visibleHeight = zoomHeight / zoomFactor;
                     
@@ -433,6 +435,17 @@ void MainWindow::initZoomWindow() {
     zoomWindowBtnFocusZoom = get("zoomWindowBtnFocusZoom");
     zoomWindowBtnFocusAll = get("zoomWindowBtnFocusAll");
     zoomWindowBtnDrag = get("zoomWindowBtnDrag");
+    
+    // Set zoom window size from settings
+    int zoomWidth, zoomHeight;
+    getZoomWindowSize(zoomWidth, zoomHeight);
+    if (zoomWindowDrawingArea) {
+        gtk_widget_set_size_request(zoomWindowDrawingArea, zoomWidth, zoomHeight);
+    }
+    if (zoomWindowFrame) {
+        // Frame is slightly taller to accommodate the toolbar
+        gtk_widget_set_size_request(zoomWindowFrame, zoomWidth, zoomHeight + 10);
+    }
     
     // Load tablet mapping configuration from settings
     loadTabletMappingConfig();
@@ -557,12 +570,15 @@ void MainWindow::initZoomWindow() {
                                 double pageDisplayWidth = pageView->getDisplayWidthDouble();
                                 double pageDisplayHeight = pageView->getDisplayHeightDouble();
                                 
+                                // Get zoom window dimensions from settings
+                                double zoomFactor = self->getZoomWindowFactor();
+                                int defaultWidth, defaultHeight;
+                                self->getZoomWindowSize(defaultWidth, defaultHeight);
                                 int zoomWidth = gtk_widget_get_allocated_width(self->zoomWindowDrawingArea);
                                 int zoomHeight = gtk_widget_get_allocated_height(self->zoomWindowDrawingArea);
-                                if (zoomWidth <= 0) zoomWidth = 533;
-                                if (zoomHeight <= 0) zoomHeight = 300;
+                                if (zoomWidth <= 0) zoomWidth = defaultWidth;
+                                if (zoomHeight <= 0) zoomHeight = defaultHeight;
                                 
-                                double zoomFactor = 1.5;
                                 double visibleWidth = zoomWidth / zoomFactor;
                                 double visibleHeight = zoomHeight / zoomFactor;
                                 
@@ -708,15 +724,17 @@ void MainWindow::initZoomWindow() {
                             double pageDisplayWidth = pageView->getDisplayWidthDouble();
                             double pageDisplayHeight = pageView->getDisplayHeightDouble();
                             
-                            // Zoom window dimensions (use defaults if not yet allocated)
+                            // Zoom window dimensions from settings (use defaults if not yet allocated)
+                            double zoomFactor = self->getZoomWindowFactor();
+                            int defaultWidth, defaultHeight;
+                            self->getZoomWindowSize(defaultWidth, defaultHeight);
                             int zoomWidth = gtk_widget_get_allocated_width(self->zoomWindowDrawingArea);
                             int zoomHeight = gtk_widget_get_allocated_height(self->zoomWindowDrawingArea);
-                            if (zoomWidth <= 0) zoomWidth = 533;
-                            if (zoomHeight <= 0) zoomHeight = 300;
+                            if (zoomWidth <= 0) zoomWidth = defaultWidth;
+                            if (zoomHeight <= 0) zoomHeight = defaultHeight;
                             
                             // Apply magnification factor
                             // The visible area in page display coordinates is smaller than the zoom window size
-                            double zoomFactor = 1.5;
                             double indicatorWidth = static_cast<double>(zoomWidth) / zoomFactor;
                             double indicatorHeight = static_cast<double>(zoomHeight) / zoomFactor;
                             
@@ -792,9 +810,8 @@ gboolean MainWindow::onZoomWindowDraw(GtkWidget* widget, cairo_t* cr, MainWindow
         return FALSE;
     }
 
-    // Apply magnification factor for the zoom window
-    // The visible area in page display coordinates is smaller than the zoom window size
-    double zoomFactor = 1.5;  // Magnification factor - content appears 3x larger
+    // Apply magnification factor for the zoom window from settings
+    double zoomFactor = self->getZoomWindowFactor();
     double visibleWidth = zoomWidth / zoomFactor;
     double visibleHeight = zoomHeight / zoomFactor;
 
@@ -1081,11 +1098,13 @@ gboolean MainWindow::onZoomWindowKeyPress(GtkWidget* widget, GdkEventKey* event,
     double pageDisplayWidth = pageView->getDisplayWidthDouble();
     double pageDisplayHeight = pageView->getDisplayHeightDouble();
     
-    // Zoom window dimensions
+    // Zoom window dimensions from settings
+    int defaultWidth, defaultHeight;
+    self->getZoomWindowSize(defaultWidth, defaultHeight);
     int zoomWidth = gtk_widget_get_allocated_width(self->zoomWindowDrawingArea);
     int zoomHeight = gtk_widget_get_allocated_height(self->zoomWindowDrawingArea);
-    if (zoomWidth <= 0) zoomWidth = 533;
-    if (zoomHeight <= 0) zoomHeight = 300;
+    if (zoomWidth <= 0) zoomWidth = defaultWidth;
+    if (zoomHeight <= 0) zoomHeight = defaultHeight;
     
     // Maximum position (so the indicator stays within page bounds)
     double maxX = std::max(0.0, pageDisplayWidth - zoomWidth);
@@ -1315,6 +1334,23 @@ void MainWindow::loadTabletMappingConfig() {
     } else {
         g_message("TabletMapping: System does not support tablet mapping (kwriteconfig not found on Linux, or not implemented on Windows)");
     }
+}
+
+double MainWindow::getZoomWindowFactor() const {
+    Settings* settings = control->getSettings();
+    SElement& zoomWindow = settings->getCustomElement("zoomWindow");
+    double factor = 1.5;  // Default value
+    zoomWindow.getDouble("zoomFactor", factor);
+    return factor;
+}
+
+void MainWindow::getZoomWindowSize(int& width, int& height) const {
+    Settings* settings = control->getSettings();
+    SElement& zoomWindow = settings->getCustomElement("zoomWindow");
+    width = 533;   // Default value
+    height = 300;  // Default value
+    zoomWindow.getInt("width", width);
+    zoomWindow.getInt("height", height);
 }
 
 void MainWindow::setGtkTouchscreenScrollingForDeviceMapping() {

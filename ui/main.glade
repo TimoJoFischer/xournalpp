@@ -142,8 +142,6 @@
             <property name="valign">end</property>
             <property name="margin-right">0</property>
             <property name="margin-bottom">55</property>
-            <property name="width-request">533</property>
-            <property name="height-request">310</property>
             <property name="shadow-type">etched-in</property>
             <child>
               <object class="GtkBox" id="zoomWindowBox">
@@ -323,8 +321,6 @@
                     <property name="name">zoomWindowDrawingArea</property>
                     <property name="visible">True</property>
                     <property name="can-focus">False</property>
-                    <property name="width-request">533</property>
-                    <property name="height-request">300</property>
                   </object>
                   <packing>
                     <property name="expand">True</property>

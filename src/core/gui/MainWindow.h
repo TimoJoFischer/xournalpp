@@ -136,6 +136,11 @@ public:
     /// Infer the window's DPI from available monitor info and use it to set the default zoom value.
     void setDPI() const;
 
+    /**
+     * Load tablet mapping configuration from settings
+     */
+    void loadTabletMappingConfig();
+
 private:
     void initXournalWidget();
 
@@ -244,9 +249,14 @@ private:
     void initZoomWindow();
     
     /**
-     * Load tablet mapping configuration from settings
+     * Get the zoom window magnification factor from settings
      */
-    void loadTabletMappingConfig();
+    double getZoomWindowFactor() const;
+    
+    /**
+     * Get the zoom window dimensions from settings
+     */
+    void getZoomWindowSize(int& width, int& height) const;
     
     /**
      * Transform zoom window coordinates to page coordinates
