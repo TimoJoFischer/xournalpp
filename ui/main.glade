@@ -171,7 +171,6 @@
                             <property name="visible">True</property>
                             <property name="can-focus">True</property>
                             <property name="receives-default">True</property>
-                            <property name="active">True</property>
                             <property name="tooltip-text">Focus tablet input to zoom window only</property>
                             <child>
                               <object class="GtkImage">
@@ -192,6 +191,7 @@
                             <property name="visible">True</property>
                             <property name="can-focus">True</property>
                             <property name="receives-default">True</property>
+                            <property name="active">True</property>
                             <property name="tooltip-text">Map tablet input to full window</property>
                             <child>
                               <object class="GtkImage">
@@ -227,6 +227,46 @@
                             <property name="position">2</property>
                           </packing>
                         </child>
+                        <child>
+                          <object class="GtkButton" id="zoomWindowBtnPageUp">
+                            <property name="visible">True</property>
+                            <property name="can-focus">True</property>
+                            <property name="receives-default">True</property>
+                            <property name="tooltip-text">Go to previous page</property>
+                            <child>
+                              <object class="GtkImage">
+                                <property name="visible">True</property>
+                                <property name="icon-name">go-up-symbolic</property>
+                                <property name="icon-size">1</property>
+                              </object>
+                            </child>
+                          </object>
+                          <packing>
+                            <property name="expand">False</property>
+                            <property name="fill">False</property>
+                            <property name="position">3</property>
+                          </packing>
+                        </child>
+                        <child>
+                          <object class="GtkButton" id="zoomWindowBtnPageDown">
+                            <property name="visible">True</property>
+                            <property name="can-focus">True</property>
+                            <property name="receives-default">True</property>
+                            <property name="tooltip-text">Go to next page</property>
+                            <child>
+                              <object class="GtkImage">
+                                <property name="visible">True</property>
+                                <property name="icon-name">go-down-symbolic</property>
+                                <property name="icon-size">1</property>
+                              </object>
+                            </child>
+                          </object>
+                          <packing>
+                            <property name="expand">False</property>
+                            <property name="fill">False</property>
+                            <property name="position">4</property>
+                          </packing>
+                        </child>
                       </object>
                       <packing>
                         <property name="expand">False</property>
@@ -257,7 +297,7 @@
                         <child>
                           <object class="GtkImage">
                             <property name="visible">True</property>
-                            <property name="icon-name">go-down-symbolic</property>
+                            <property name="icon-name">window-minimize-symbolic</property>
                             <property name="icon-size">1</property>
                           </object>
                         </child>

@@ -95,6 +95,64 @@ void gtk_xournal_set_zoom_indicator(GtkWidget* widget, bool show, double x, doub
     gtk_widget_queue_draw(widget);
 }
 
+bool gtk_xournal_point_in_indicator(GtkWidget* widget, double x, double y) {
+    g_return_val_if_fail(widget != nullptr, false);
+    g_return_val_if_fail(GTK_IS_XOURNAL(widget), false);
+    
+    GtkXournal* xournal = GTK_XOURNAL(widget);
+    if (!xournal->showZoomIndicator) {
+        return false;
+    }
+    
+    return x >= xournal->zoomIndicatorX && 
+           x <= xournal->zoomIndicatorX + xournal->zoomIndicatorWidth &&
+           y >= xournal->zoomIndicatorY && 
+           y <= xournal->zoomIndicatorY + xournal->zoomIndicatorHeight;
+}
+
+void gtk_xournal_start_indicator_drag(GtkWidget* widget, double x, double y) {
+    g_return_if_fail(widget != nullptr);
+    g_return_if_fail(GTK_IS_XOURNAL(widget));
+    
+    GtkXournal* xournal = GTK_XOURNAL(widget);
+    xournal->indicatorDragging = true;
+    // Store offset from indicator top-left to click position
+    xournal->indicatorDragOffsetX = x - xournal->zoomIndicatorX;
+    xournal->indicatorDragOffsetY = y - xournal->zoomIndicatorY;
+}
+
+void gtk_xournal_update_indicator_drag(GtkWidget* widget, double x, double y) {
+    g_return_if_fail(widget != nullptr);
+    g_return_if_fail(GTK_IS_XOURNAL(widget));
+    
+    GtkXournal* xournal = GTK_XOURNAL(widget);
+    if (!xournal->indicatorDragging) {
+        return;
+    }
+    
+    // Calculate new indicator position (maintaining offset from click point)
+    xournal->zoomIndicatorX = x - xournal->indicatorDragOffsetX;
+    xournal->zoomIndicatorY = y - xournal->indicatorDragOffsetY;
+    
+    gtk_widget_queue_draw(widget);
+}
+
+void gtk_xournal_stop_indicator_drag(GtkWidget* widget) {
+    g_return_if_fail(widget != nullptr);
+    g_return_if_fail(GTK_IS_XOURNAL(widget));
+    
+    GtkXournal* xournal = GTK_XOURNAL(widget);
+    xournal->indicatorDragging = false;
+}
+
+bool gtk_xournal_is_indicator_dragging(GtkWidget* widget) {
+    g_return_val_if_fail(widget != nullptr, false);
+    g_return_val_if_fail(GTK_IS_XOURNAL(widget), false);
+    
+    GtkXournal* xournal = GTK_XOURNAL(widget);
+    return xournal->indicatorDragging;
+}
+
 auto gtk_xournal_get_visible_area(GtkWidget* widget, const XojPageView* p) -> xoj::util::Rectangle<double>* {
     g_return_val_if_fail(widget != nullptr, nullptr);
     g_return_val_if_fail(GTK_IS_XOURNAL(widget), nullptr);

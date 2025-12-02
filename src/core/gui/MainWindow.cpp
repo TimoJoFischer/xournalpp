@@ -12,6 +12,8 @@
 #include "control/Control.h"                            // for Control
 #include "control/DeviceListHelper.h"                   // for getSourceMapping
 #include "control/ScrollHandler.h"                      // for ScrollHandler
+#include "control/ToolEnums.h"                          // for TOOL_FLOATING_TOOLBOX
+#include "control/ToolHandler.h"                        // for ToolHandler
 #include "model/Document.h"                             // for Document
 #include "control/actions/ActionDatabase.h"             // for ActionDatabase
 #include "control/jobs/XournalScheduler.h"              // for XournalScheduler
@@ -23,7 +25,9 @@
 #include "gui/GladeGui.h"                               // for GladeGui
 #include "gui/PdfFloatingToolbox.h"                     // for PdfFloatingToolbox
 #include "gui/SearchBar.h"                              // for SearchBar
+#include "gui/inputdevices/InputContext.h"              // for InputContext
 #include "gui/inputdevices/InputEvents.h"               // for INPUT_DEVICE_TOUC...
+#include "gui/inputdevices/InputUtils.h"                // for InputUtils
 #include "gui/inputdevices/PositionInputData.h"         // for PositionInputData
 #include "gui/inputdevices/DeviceId.h"                  // for DeviceId
 #include "gui/menus/menubar/Menubar.h"                  // for Menubar
@@ -46,6 +50,7 @@
 #include "util/gtk4_helper.h"                           // for gtk_widget_get_width
 #include "util/i18n.h"                                  // for FS, _F
 #include "util/raii/CStringWrapper.h"                   // for OwnedCString
+#include "util/TabletMapping.h"                          // for TabletMapping
 
 #include "GladeSearchpath.h"     // for GladeSearchpath
 #include "PageView.h"            // for XojPageView
@@ -319,6 +324,105 @@ void MainWindow::initXournalWidget() {
     gtk_widget_show_all(winXournal);
 
     scrollHandling->init(this->xournal->getWidget(), this->xournal->getLayout());
+    
+    // Set up pre-event handler for zoom indicator dragging
+    // This runs before normal input handling in InputContext
+    GtkXournal* xoj = GTK_XOURNAL(this->xournal->getWidget());
+    if (xoj && xoj->input) {
+        xoj->input->setPreEventHandler(
+            [](GdkEvent* event, void* userData) -> bool {
+                auto* self = static_cast<MainWindow*>(userData);
+                GtkWidget* widget = self->xournal->getWidget();
+                
+                // Only handle if zoom window is visible
+                if (!self->zoomWindowFrame || !gtk_widget_get_visible(self->zoomWindowFrame)) {
+                    return false;
+                }
+                
+                GdkEventType type = gdk_event_get_event_type(event);
+                
+                if (type == GDK_BUTTON_PRESS) {
+                    GdkEventButton* btnEvent = reinterpret_cast<GdkEventButton*>(event);
+                    if (btnEvent->button == 1) {  // Left click only
+                        // Check if click is on the indicator
+                        if (gtk_xournal_point_in_indicator(widget, btnEvent->x, btnEvent->y)) {
+                            gtk_xournal_start_indicator_drag(widget, btnEvent->x, btnEvent->y);
+                            self->indicatorDirectDragging = true;
+                            return true;  // Consume the event
+                        }
+                    }
+                } else if (type == GDK_MOTION_NOTIFY && self->indicatorDirectDragging) {
+                    GdkEventMotion* motionEvent = reinterpret_cast<GdkEventMotion*>(event);
+                    
+                    GtkXournal* xoj = GTK_XOURNAL(widget);
+                    
+                    // Calculate new indicator position from mouse position and drag offset
+                    double newIndicatorX = motionEvent->x - xoj->indicatorDragOffsetX;
+                    double newIndicatorY = motionEvent->y - xoj->indicatorDragOffsetY;
+                    
+                    // Get zoom window dimensions
+                    double zoomFactor = 1.5;
+                    int zoomWidth = gtk_widget_get_allocated_width(self->zoomWindowDrawingArea);
+                    int zoomHeight = gtk_widget_get_allocated_height(self->zoomWindowDrawingArea);
+                    if (zoomWidth <= 0) zoomWidth = 533;
+                    if (zoomHeight <= 0) zoomHeight = 300;
+                    double visibleWidth = zoomWidth / zoomFactor;
+                    double visibleHeight = zoomHeight / zoomFactor;
+                    
+                    // Get current page info
+                    size_t currentPage = self->xournal->getCurrentPage();
+                    
+                    if (currentPage == npos) {
+                        return true;
+                    }
+                    
+                    XojPageView* currentPageView = self->xournal->getViewFor(currentPage);
+                    if (!currentPageView) {
+                        return true;
+                    }
+                    
+                    // Convert to page-relative coordinates
+                    double pageRelX = newIndicatorX - currentPageView->getX();
+                    double pageRelY = newIndicatorY - currentPageView->getY();
+                    
+                    // Get current page bounds
+                    double pageDisplayWidth = currentPageView->getDisplayWidthDouble();
+                    double pageDisplayHeight = currentPageView->getDisplayHeightDouble();
+                    double maxX = std::max(0.0, pageDisplayWidth - visibleWidth);
+                    double maxY = std::max(0.0, pageDisplayHeight - visibleHeight);
+                    
+                    // Simply clamp position within current page bounds
+                    self->zoomIndicatorPosX = std::max(0.0, std::min(pageRelX, maxX));
+                    self->zoomIndicatorPosY = std::max(0.0, std::min(pageRelY, maxY));
+                    
+                    // Update widget indicator position
+                    xoj->zoomIndicatorX = currentPageView->getX() + self->zoomIndicatorPosX;
+                    xoj->zoomIndicatorY = currentPageView->getY() + self->zoomIndicatorPosY;
+                    
+                    // Scroll main view to keep indicator visible
+                    self->xournal->ensureRectIsVisible(
+                        static_cast<int>(xoj->zoomIndicatorX),
+                        static_cast<int>(xoj->zoomIndicatorY),
+                        static_cast<int>(visibleWidth),
+                        static_cast<int>(visibleHeight));
+                    
+                    // Redraw the zoom window
+                    gtk_widget_queue_draw(self->zoomWindowDrawingArea);
+                    gtk_widget_queue_draw(widget);
+                    
+                    return true;  // Consume the event
+                } else if (type == GDK_BUTTON_RELEASE && self->indicatorDirectDragging) {
+                    GdkEventButton* btnEvent = reinterpret_cast<GdkEventButton*>(event);
+                    if (btnEvent->button == 1) {
+                        gtk_xournal_stop_indicator_drag(widget);
+                        self->indicatorDirectDragging = false;
+                        return true;  // Consume the event
+                    }
+                }
+                
+                return false;  // Let normal handlers process the event
+            }, this);
+    }
 }
 
 void MainWindow::initZoomWindow() {
@@ -330,6 +434,16 @@ void MainWindow::initZoomWindow() {
     zoomWindowBtnFocusAll = get("zoomWindowBtnFocusAll");
     zoomWindowBtnDrag = get("zoomWindowBtnDrag");
     
+    // Load tablet mapping configuration from settings
+    loadTabletMappingConfig();
+    
+    // Apply full window tablet mapping at startup
+    // This ensures the tablet is mapped to the full window when Xournal++ starts
+    if (TabletMapping::isAvailable()) {
+        TabletMapping::setMappingMode(TabletMapping::MappingMode::FullWindow);
+        g_message("TabletMapping: Applied full window mapping at startup");
+    }
+    
     // Set up minimize button
     if (zoomWindowBtnMinimize && zoomWindowFrame && zoomWindowBtnMaximize) {
         g_signal_connect(zoomWindowBtnMinimize, "clicked", G_CALLBACK(+[](GtkButton*, gpointer data) {
@@ -340,6 +454,8 @@ void MainWindow::initZoomWindow() {
             if (self->xournal) {
                 gtk_xournal_set_zoom_indicator(self->xournal->getWidget(), false, 0, 0, 0, 0);
             }
+            // Map tablet to full window when zoom window is minimized
+            TabletMapping::setMappingMode(TabletMapping::MappingMode::FullWindow);
         }), this);
     }
     
@@ -349,6 +465,10 @@ void MainWindow::initZoomWindow() {
             auto* self = static_cast<MainWindow*>(data);
             gtk_widget_show(self->zoomWindowFrame);
             gtk_widget_hide(self->zoomWindowBtnMaximize);
+            // Map tablet to zoom window when zoom window is shown (if focus mode is zoom)
+            if (self->zoomWindowFocusMode) {
+                TabletMapping::setMappingMode(TabletMapping::MappingMode::ZoomWindow);
+            }
         }), this);
     }
     
@@ -359,6 +479,8 @@ void MainWindow::initZoomWindow() {
             if (gtk_toggle_button_get_active(btn)) {
                 self->zoomWindowFocusMode = true;
                 gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(self->zoomWindowBtnFocusAll), FALSE);
+                // Map tablet input to zoom window only
+                TabletMapping::setMappingMode(TabletMapping::MappingMode::ZoomWindow);
             }
         }), this);
         
@@ -367,6 +489,8 @@ void MainWindow::initZoomWindow() {
             if (gtk_toggle_button_get_active(btn)) {
                 self->zoomWindowFocusMode = false;
                 gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(self->zoomWindowBtnFocusZoom), FALSE);
+                // Map tablet input to full window
+                TabletMapping::setMappingMode(TabletMapping::MappingMode::FullWindow);
             }
         }), this);
     }
@@ -377,75 +501,160 @@ void MainWindow::initZoomWindow() {
                               GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK | 
                               GDK_POINTER_MOTION_MASK | GDK_BUTTON_MOTION_MASK);
         
-        g_signal_connect(zoomWindowBtnDrag, "button-press-event", G_CALLBACK(+[](GtkWidget*, GdkEventButton* event, gpointer data) -> gboolean {
+        auto dragBtnPress = +[](GtkWidget*, GdkEventButton* event, gpointer data) -> gboolean {
             auto* self = static_cast<MainWindow*>(data);
             if (event->button == 1) {
                 self->zoomWindowDragging = true;
+                // Store the click position as the reference center
                 self->zoomWindowDragStartX = event->x_root;
                 self->zoomWindowDragStartY = event->y_root;
-                self->zoomWindowDragIndicatorStartX = self->zoomIndicatorPosX;
-                self->zoomWindowDragIndicatorStartY = self->zoomIndicatorPosY;
+                self->zoomWindowDragCurrentX = event->x_root;
+                self->zoomWindowDragCurrentY = event->y_root;
+                
+                // Start the timer for continuous movement (30ms interval for smooth fast movement)
+                if (self->zoomWindowDragTimerId == 0) {
+                    self->zoomWindowDragTimerId = g_timeout_add(30, +[](gpointer data) -> gboolean {
+                        auto* self = static_cast<MainWindow*>(data);
+                        if (!self->zoomWindowDragging || !self->xournal) {
+                            self->zoomWindowDragTimerId = 0;
+                            return FALSE;
+                        }
+                        
+                        // Calculate offset from click position to current mouse position
+                        double offsetX = self->zoomWindowDragCurrentX - self->zoomWindowDragStartX;
+                        double offsetY = self->zoomWindowDragCurrentY - self->zoomWindowDragStartY;
+                        
+                        // Check if within dead zone (circular, small radius)
+                        double distance = std::sqrt(offsetX * offsetX + offsetY * offsetY);
+                        double deadZone = 3.0;  // pixels - no movement if within this radius
+                        double slowZone = 10.0; // pixels - slower speed between deadZone and slowZone
+                        
+                        if (distance < deadZone) {
+                            // Too close to center, no movement
+                            return TRUE;
+                        }
+                        
+                        // Normalize direction vector to length 1 (preserves angle)
+                        double dirX = offsetX / distance;
+                        double dirY = offsetY / distance;
+                        
+                        // Variable speed based on distance from center
+                        double speed;
+                        if (distance < slowZone) {
+                            // Slower speed in the 3-10px range
+                            speed = 5.0;
+                        } else {
+                            // Max speed beyond 10px
+                            speed = 15.0;
+                        }
+                        double moveX = dirX * speed;
+                        double moveY = dirY * speed;
+                        
+                        size_t currentPage = self->xournal->getCurrentPage();
+                        if (currentPage != npos) {
+                            XojPageView* pageView = self->xournal->getViewFor(currentPage);
+                            if (pageView) {
+                                double pageDisplayWidth = pageView->getDisplayWidthDouble();
+                                double pageDisplayHeight = pageView->getDisplayHeightDouble();
+                                
+                                int zoomWidth = gtk_widget_get_allocated_width(self->zoomWindowDrawingArea);
+                                int zoomHeight = gtk_widget_get_allocated_height(self->zoomWindowDrawingArea);
+                                if (zoomWidth <= 0) zoomWidth = 533;
+                                if (zoomHeight <= 0) zoomHeight = 300;
+                                
+                                double zoomFactor = 1.5;
+                                double visibleWidth = zoomWidth / zoomFactor;
+                                double visibleHeight = zoomHeight / zoomFactor;
+                                
+                                double maxX = std::max(0.0, pageDisplayWidth - visibleWidth);
+                                double maxY = std::max(0.0, pageDisplayHeight - visibleHeight);
+                                
+                                double newPosX = self->zoomIndicatorPosX + moveX;
+                                double newPosY = self->zoomIndicatorPosY + moveY;
+                                
+                                // Simply clamp to current page bounds - no page navigation
+                                self->zoomIndicatorPosX = std::max(0.0, std::min(newPosX, maxX));
+                                self->zoomIndicatorPosY = std::max(0.0, std::min(newPosY, maxY));
+                                
+                                // Scroll main view to keep indicator visible
+                                int pageX = pageView->getX();
+                                int pageY = pageView->getY();
+                                int indicatorAbsX = pageX + static_cast<int>(self->zoomIndicatorPosX);
+                                int indicatorAbsY = pageY + static_cast<int>(self->zoomIndicatorPosY);
+                                self->xournal->ensureRectIsVisible(indicatorAbsX, indicatorAbsY,
+                                                                   static_cast<int>(visibleWidth),
+                                                                   static_cast<int>(visibleHeight));
+                                
+                                gtk_widget_queue_draw(self->zoomWindowDrawingArea);
+                            }
+                        }
+                        return TRUE;
+                    }, self);
+                }
                 return TRUE;
             }
             return FALSE;
-        }), this);
+        };
+        g_signal_connect(zoomWindowBtnDrag, "button-press-event", G_CALLBACK(dragBtnPress), this);
         
-        g_signal_connect(zoomWindowBtnDrag, "button-release-event", G_CALLBACK(+[](GtkWidget*, GdkEventButton* event, gpointer data) -> gboolean {
+        auto dragBtnRelease = +[](GtkWidget*, GdkEventButton* event, gpointer data) -> gboolean {
             auto* self = static_cast<MainWindow*>(data);
             if (event->button == 1 && self->zoomWindowDragging) {
                 self->zoomWindowDragging = false;
+                // Timer will stop itself on next tick
                 return TRUE;
             }
             return FALSE;
-        }), this);
+        };
+        g_signal_connect(zoomWindowBtnDrag, "button-release-event", G_CALLBACK(dragBtnRelease), this);
         
-        g_signal_connect(zoomWindowBtnDrag, "motion-notify-event", G_CALLBACK(+[](GtkWidget*, GdkEventMotion* event, gpointer data) -> gboolean {
+        auto dragBtnMotion = +[](GtkWidget*, GdkEventMotion* event, gpointer data) -> gboolean {
             auto* self = static_cast<MainWindow*>(data);
-            if (!self->zoomWindowDragging || !self->xournal) {
+            if (!self->zoomWindowDragging) {
                 return FALSE;
             }
-            
-            // Calculate delta from drag start position
-            double deltaX = event->x_root - self->zoomWindowDragStartX;
-            double deltaY = event->y_root - self->zoomWindowDragStartY;
-            
-            // Update indicator position (inverted: dragging right moves indicator left)
-            double newPosX = self->zoomWindowDragIndicatorStartX - deltaX;
-            double newPosY = self->zoomWindowDragIndicatorStartY - deltaY;
-            
-            // Get page bounds for clamping
-            size_t currentPage = self->xournal->getCurrentPage();
-            if (currentPage != npos) {
-                XojPageView* pageView = self->xournal->getViewFor(currentPage);
-                if (pageView) {
-                    double pageDisplayWidth = pageView->getDisplayWidthDouble();
-                    double pageDisplayHeight = pageView->getDisplayHeightDouble();
-                    
-                    int zoomWidth = gtk_widget_get_allocated_width(self->zoomWindowDrawingArea);
-                    int zoomHeight = gtk_widget_get_allocated_height(self->zoomWindowDrawingArea);
-                    if (zoomWidth <= 0) zoomWidth = 533;
-                    if (zoomHeight <= 0) zoomHeight = 300;
-                    
-                    double maxX = std::max(0.0, pageDisplayWidth - zoomWidth);
-                    double maxY = std::max(0.0, pageDisplayHeight - zoomHeight);
-                    
-                    // Clamp to valid range
-                    self->zoomIndicatorPosX = std::max(0.0, std::min(newPosX, maxX));
-                    self->zoomIndicatorPosY = std::max(0.0, std::min(newPosY, maxY));
-                    
-                    // Ensure the indicator rectangle is visible in the main view
-                    int pageX = pageView->getX();
-                    int pageY = pageView->getY();
-                    int indicatorAbsX = pageX + static_cast<int>(self->zoomIndicatorPosX);
-                    int indicatorAbsY = pageY + static_cast<int>(self->zoomIndicatorPosY);
-                    self->xournal->ensureRectIsVisible(indicatorAbsX, indicatorAbsY, zoomWidth, zoomHeight);
-                    
-                    // Redraw the zoom window
-                    gtk_widget_queue_draw(self->zoomWindowDrawingArea);
-                }
-            }
-            
+            // Just update the current mouse position, timer will handle movement
+            self->zoomWindowDragCurrentX = event->x_root;
+            self->zoomWindowDragCurrentY = event->y_root;
             return TRUE;
+        };
+        g_signal_connect(zoomWindowBtnDrag, "motion-notify-event", G_CALLBACK(dragBtnMotion), this);
+    }
+    
+    // Set up page up button
+    GtkWidget* zoomWindowBtnPageUp = get("zoomWindowBtnPageUp");
+    if (zoomWindowBtnPageUp) {
+        g_signal_connect(zoomWindowBtnPageUp, "clicked", G_CALLBACK(+[](GtkButton*, gpointer data) {
+            auto* self = static_cast<MainWindow*>(data);
+            if (!self->xournal || !self->control) {
+                return;
+            }
+            size_t currentPage = self->xournal->getCurrentPage();
+            if (currentPage > 0) {
+                self->zoomWindowInternalPageChange = true;
+                self->zoomIndicatorPosX = 0;
+                self->zoomIndicatorPosY = 0;
+                self->control->getScrollHandler()->scrollToPage(currentPage - 1, XojPdfRectangle{});
+            }
+        }), this);
+    }
+    
+    // Set up page down button
+    GtkWidget* zoomWindowBtnPageDown = get("zoomWindowBtnPageDown");
+    if (zoomWindowBtnPageDown) {
+        g_signal_connect(zoomWindowBtnPageDown, "clicked", G_CALLBACK(+[](GtkButton*, gpointer data) {
+            auto* self = static_cast<MainWindow*>(data);
+            if (!self->xournal || !self->control) {
+                return;
+            }
+            size_t currentPage = self->xournal->getCurrentPage();
+            size_t pageCount = self->control->getDocument()->getPageCount();
+            if (currentPage < pageCount - 1) {
+                self->zoomWindowInternalPageChange = true;
+                self->zoomIndicatorPosX = 0;
+                self->zoomIndicatorPosY = 0;
+                self->control->getScrollHandler()->scrollToPage(currentPage + 1, XojPdfRectangle{});
+            }
         }), this);
     }
     
@@ -505,10 +714,11 @@ void MainWindow::initZoomWindow() {
                             if (zoomWidth <= 0) zoomWidth = 533;
                             if (zoomHeight <= 0) zoomHeight = 300;
                             
-                            // No additional zoom factor - 1:1 with the main view for sharp rendering
-                            // The visible area in page display coordinates equals the zoom window size
-                            double indicatorWidth = static_cast<double>(zoomWidth);
-                            double indicatorHeight = static_cast<double>(zoomHeight);
+                            // Apply magnification factor
+                            // The visible area in page display coordinates is smaller than the zoom window size
+                            double zoomFactor = 1.5;
+                            double indicatorWidth = static_cast<double>(zoomWidth) / zoomFactor;
+                            double indicatorHeight = static_cast<double>(zoomHeight) / zoomFactor;
                             
                             // Use stored position (can be moved with arrow keys)
                             double indicatorX = self->zoomIndicatorPosX;
@@ -582,11 +792,11 @@ gboolean MainWindow::onZoomWindowDraw(GtkWidget* widget, cairo_t* cr, MainWindow
         return FALSE;
     }
 
-    // For sharp rendering, we render at 1:1 with the buffer (no additional magnification)
-    // This means the zoom window shows content at the same zoom level as the main view
-    // The visible area equals the zoom window size in page display coordinates
-    double visibleWidth = zoomWidth;
-    double visibleHeight = zoomHeight;
+    // Apply magnification factor for the zoom window
+    // The visible area in page display coordinates is smaller than the zoom window size
+    double zoomFactor = 1.5;  // Magnification factor - content appears 3x larger
+    double visibleWidth = zoomWidth / zoomFactor;
+    double visibleHeight = zoomHeight / zoomFactor;
 
     // Use stored indicator position (can be moved with arrow keys)
     double indicatorX = self->zoomIndicatorPosX;
@@ -609,8 +819,8 @@ gboolean MainWindow::onZoomWindowDraw(GtkWidget* widget, cairo_t* cr, MainWindow
         self->xournal->ensureRectIsVisible(indicatorAbsX, indicatorAbsY, zoomWidth, zoomHeight);
     }
 
-    // Store transformation parameters for input handling (no additional scaling)
-    self->zoomWindowScale = 1.0;
+    // Store transformation parameters for input handling
+    self->zoomWindowScale = zoomFactor;
     self->zoomWindowIndicatorX = indicatorX;
     self->zoomWindowIndicatorY = indicatorY;
 
@@ -628,12 +838,12 @@ gboolean MainWindow::onZoomWindowDraw(GtkWidget* widget, cairo_t* cr, MainWindow
     cairo_rectangle(cr, 0, 0, zoomWidth, zoomHeight);
     cairo_clip(cr);
     
-    // Render at 1:1 with the buffer (at xournalZoom level)
-    // This keeps the content sharp because we're not scaling up a lower-res buffer
-    cairo_scale(cr, xournalZoom, xournalZoom);
+    // Render with magnification
+    // Apply zoom factor to show content larger
+    cairo_scale(cr, zoomFactor * xournalZoom, zoomFactor * xournalZoom);
     cairo_translate(cr, -sourceXPage, -sourceYPage);
     
-    // paintPage scales by xournalZoom internally, so we undo our scale
+    // paintPage scales by xournalZoom internally, so we undo the xournalZoom scale
     cairo_scale(cr, 1.0 / xournalZoom, 1.0 / xournalZoom);
     pageView->paintPage(cr, nullptr);
     
@@ -670,8 +880,57 @@ PositionInputData MainWindow::transformZoomWindowCoords(double x, double y, GdkE
 }
 
 gboolean MainWindow::onZoomWindowButtonPress(GtkWidget* widget, GdkEventButton* event, MainWindow* self) {
-    if (!self->xournal || event->button != 1) {
+    if (!self->xournal) {
         return FALSE;
+    }
+    
+    // Track stylus button state and check for eraser device
+    GdkDevice* device = gdk_event_get_source_device(reinterpret_cast<GdkEvent*>(event));
+    bool isEraser = device && gdk_device_get_source(device) == GDK_SOURCE_ERASER;
+    
+    // Handle stylus buttons (2 and 3) for tool changes
+    if (event->button == 2) {
+        self->zoomWindowStylusBtn2 = true;
+    } else if (event->button == 3) {
+        self->zoomWindowStylusBtn3 = true;
+    }
+    
+    // Apply tool change based on stylus button or eraser
+    ToolHandler* toolHandler = self->control->getToolHandler();
+    Settings* settings = self->control->getSettings();
+    bool toolChanged = false;
+    
+    if (self->zoomWindowStylusBtn2) {
+        toolChanged = InputUtils::applyButton(toolHandler, settings, Button::BUTTON_STYLUS_ONE);
+    } else if (self->zoomWindowStylusBtn3) {
+        toolChanged = InputUtils::applyButton(toolHandler, settings, Button::BUTTON_STYLUS_TWO);
+    } else if (isEraser) {
+        self->zoomWindowIsEraser = true;
+        toolChanged = InputUtils::applyButton(toolHandler, settings, Button::BUTTON_ERASER);
+    }
+    
+    if (toolChanged) {
+        toolHandler->fireToolChanged();
+    }
+    
+    // Handle stylus button press "in the air" (not pen tip) for tools like floating toolbox
+    // This happens when buttons 2 or 3 are pressed without the pen touching the surface
+    if (event->button == 2 || event->button == 3) {
+        // Check if the tool is floating toolbox - show it at zoom window position
+        if (toolHandler->getToolType() == TOOL_FLOATING_TOOLBOX) {
+            // Get zoom window position relative to the top-level window
+            gint wx = 0, wy = 0;
+            gtk_widget_translate_coordinates(widget, gtk_widget_get_toplevel(widget), 
+                                             static_cast<gint>(event->x), static_cast<gint>(event->y), 
+                                             &wx, &wy);
+            self->floatingToolbox->show(wx, wy);
+        }
+        return TRUE;  // Consume the event but don't start drawing
+    }
+    
+    // Only start drawing on button 1 (pen tip)
+    if (event->button != 1) {
+        return TRUE;  // Consume the event but don't start drawing
     }
     
     size_t currentPage = self->xournal->getCurrentPage();
@@ -699,8 +958,45 @@ gboolean MainWindow::onZoomWindowButtonPress(GtkWidget* widget, GdkEventButton* 
 }
 
 gboolean MainWindow::onZoomWindowButtonRelease(GtkWidget* widget, GdkEventButton* event, MainWindow* self) {
-    if (!self->xournal || !self->zoomWindowInputActive || event->button != 1) {
+    if (!self->xournal) {
         return FALSE;
+    }
+    
+    // Handle stylus button release - restore tool to toolbar tool
+    ToolHandler* toolHandler = self->control->getToolHandler();
+    bool toolChanged = false;
+    
+    if (event->button == 2) {
+        self->zoomWindowStylusBtn2 = false;
+        // If no other modifier buttons are pressed, restore toolbar tool
+        if (!self->zoomWindowStylusBtn3 && !self->zoomWindowIsEraser) {
+            toolChanged = toolHandler->pointActiveToolToToolbarTool();
+        }
+    } else if (event->button == 3) {
+        self->zoomWindowStylusBtn3 = false;
+        // If no other modifier buttons are pressed, restore toolbar tool
+        if (!self->zoomWindowStylusBtn2 && !self->zoomWindowIsEraser) {
+            toolChanged = toolHandler->pointActiveToolToToolbarTool();
+        }
+    }
+    
+    // Check if eraser device is no longer being used
+    GdkDevice* device = gdk_event_get_source_device(reinterpret_cast<GdkEvent*>(event));
+    bool isEraser = device && gdk_device_get_source(device) == GDK_SOURCE_ERASER;
+    if (self->zoomWindowIsEraser && !isEraser && event->button == 1) {
+        self->zoomWindowIsEraser = false;
+        if (!self->zoomWindowStylusBtn2 && !self->zoomWindowStylusBtn3) {
+            toolChanged = toolHandler->pointActiveToolToToolbarTool();
+        }
+    }
+    
+    if (toolChanged) {
+        toolHandler->fireToolChanged();
+    }
+    
+    // Only handle button 1 release for finishing drawing
+    if (event->button != 1 || !self->zoomWindowInputActive) {
+        return TRUE;  // Consume the event
     }
     
     size_t currentPage = self->xournal->getCurrentPage();
@@ -936,6 +1232,89 @@ gboolean MainWindow::onZoomWindowKeyPress(GtkWidget* widget, GdkEventKey* event,
     }
     
     return FALSE;
+}
+
+void MainWindow::loadTabletMappingConfig() {
+    // Load tablet mapping configuration from settings
+    Settings* settings = control->getSettings();
+    SElement& tabletMapping = settings->getCustomElement("tabletMapping");
+    
+    // Linux KDE configuration
+    std::string group;
+    std::string outputUuid;
+    
+    if (tabletMapping.getString("linuxKDEGroup", group) && 
+        tabletMapping.getString("linuxKDEOutputUuid", outputUuid)) {
+        
+        TabletMapping::LinuxKDEConfig linuxConfig;
+        linuxConfig.group = group;
+        linuxConfig.outputUuid = outputUuid;
+        
+        double value;
+        
+        // Full window input area (portion of tablet to use)
+        if (tabletMapping.getDouble("linuxFullInputX", value)) linuxConfig.fullInputX = value;
+        if (tabletMapping.getDouble("linuxFullInputY", value)) linuxConfig.fullInputY = value;
+        if (tabletMapping.getDouble("linuxFullInputWidth", value)) linuxConfig.fullInputWidth = value;
+        if (tabletMapping.getDouble("linuxFullInputHeight", value)) linuxConfig.fullInputHeight = value;
+        
+        // Full window output area (portion of screen to map to)
+        if (tabletMapping.getDouble("linuxFullOutputX", value)) linuxConfig.fullOutputX = value;
+        if (tabletMapping.getDouble("linuxFullOutputY", value)) linuxConfig.fullOutputY = value;
+        if (tabletMapping.getDouble("linuxFullOutputWidth", value)) linuxConfig.fullOutputWidth = value;
+        if (tabletMapping.getDouble("linuxFullOutputHeight", value)) linuxConfig.fullOutputHeight = value;
+        
+        // Zoom window input area (portion of tablet to use)
+        if (tabletMapping.getDouble("linuxZoomInputX", value)) linuxConfig.zoomInputX = value;
+        if (tabletMapping.getDouble("linuxZoomInputY", value)) linuxConfig.zoomInputY = value;
+        if (tabletMapping.getDouble("linuxZoomInputWidth", value)) linuxConfig.zoomInputWidth = value;
+        if (tabletMapping.getDouble("linuxZoomInputHeight", value)) linuxConfig.zoomInputHeight = value;
+        
+        // Zoom window output area (portion of screen to map to)
+        if (tabletMapping.getDouble("linuxZoomOutputX", value)) linuxConfig.zoomOutputX = value;
+        if (tabletMapping.getDouble("linuxZoomOutputY", value)) linuxConfig.zoomOutputY = value;
+        if (tabletMapping.getDouble("linuxZoomOutputWidth", value)) linuxConfig.zoomOutputWidth = value;
+        if (tabletMapping.getDouble("linuxZoomOutputHeight", value)) linuxConfig.zoomOutputHeight = value;
+        
+        TabletMapping::setLinuxKDEConfig(linuxConfig);
+        
+        g_message("TabletMapping: Loaded Linux KDE config - group=%s", group.c_str());
+    } else {
+        g_message("TabletMapping: No Linux KDE config found in settings. "
+                 "To configure, add tabletMapping section to settings.xml with:\n"
+                 "  linuxKDEGroup, linuxKDEOutputUuid\n"
+                 "  linuxFullInputX/Y/Width/Height, linuxFullOutputX/Y/Width/Height\n"
+                 "  linuxZoomInputX/Y/Width/Height, linuxZoomOutputX/Y/Width/Height");
+    }
+    
+    // Windows configuration (placeholder)
+    std::string deviceId;
+    if (tabletMapping.getString("windowsDeviceId", deviceId)) {
+        TabletMapping::WindowsConfig windowsConfig;
+        windowsConfig.deviceId = deviceId;
+        
+        double value;
+        if (tabletMapping.getDouble("windowsFullLeft", value)) windowsConfig.fullLeft = value;
+        if (tabletMapping.getDouble("windowsFullTop", value)) windowsConfig.fullTop = value;
+        if (tabletMapping.getDouble("windowsFullRight", value)) windowsConfig.fullRight = value;
+        if (tabletMapping.getDouble("windowsFullBottom", value)) windowsConfig.fullBottom = value;
+        
+        if (tabletMapping.getDouble("windowsZoomLeft", value)) windowsConfig.zoomLeft = value;
+        if (tabletMapping.getDouble("windowsZoomTop", value)) windowsConfig.zoomTop = value;
+        if (tabletMapping.getDouble("windowsZoomRight", value)) windowsConfig.zoomRight = value;
+        if (tabletMapping.getDouble("windowsZoomBottom", value)) windowsConfig.zoomBottom = value;
+        
+        TabletMapping::setWindowsConfig(windowsConfig);
+        
+        g_message("TabletMapping: Loaded Windows config - deviceId=%s", deviceId.c_str());
+    }
+    
+    // Check if tablet mapping is available on this system
+    if (TabletMapping::isAvailable()) {
+        g_message("TabletMapping: System supports tablet mapping");
+    } else {
+        g_message("TabletMapping: System does not support tablet mapping (kwriteconfig not found on Linux, or not implemented on Windows)");
+    }
 }
 
 void MainWindow::setGtkTouchscreenScrollingForDeviceMapping() {

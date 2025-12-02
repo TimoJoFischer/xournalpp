@@ -212,10 +212,11 @@ private:
     
     // Drag button state for moving the indicator
     bool zoomWindowDragging = false;
-    double zoomWindowDragStartX = 0.0;
+    double zoomWindowDragStartX = 0.0;  // Click position (reference center)
     double zoomWindowDragStartY = 0.0;
-    double zoomWindowDragIndicatorStartX = 0.0;
-    double zoomWindowDragIndicatorStartY = 0.0;
+    double zoomWindowDragCurrentX = 0.0;  // Current mouse position
+    double zoomWindowDragCurrentY = 0.0;
+    guint zoomWindowDragTimerId = 0;  // Timer for continuous movement
     
     // Zoom window transformation parameters (for input handling)
     double zoomWindowScale = 5.0;       // Magnification factor
@@ -223,16 +224,29 @@ private:
     double zoomWindowIndicatorY = 0.0;   // Top-left Y of visible area in page display coords
     bool zoomWindowInputActive = false;
     
+    // Stylus button state for zoom window (for tool changes like eraser)
+    bool zoomWindowStylusBtn2 = false;   // Stylus button 1 (modifier2)
+    bool zoomWindowStylusBtn3 = false;   // Stylus button 2 (modifier3)
+    bool zoomWindowIsEraser = false;     // True if using eraser tip
+    
     // Stored indicator position (can be moved with keyboard)
     double zoomIndicatorPosX = 0.0;      // User-controlled X position
     double zoomIndicatorPosY = 0.0;      // User-controlled Y position
     size_t zoomWindowLastPage = static_cast<size_t>(-1);  // Track last rendered page to detect external page changes
-    bool zoomWindowInternalPageChange = false;  // Flag to prevent resetting during our own page navigation
+    bool zoomWindowInternalPageChange = false;  // Flag to prevent resetting during keyboard page navigation
+    
+    // Indicator direct dragging (on main view)
+    bool indicatorDirectDragging = false;
 
     /**
      * Initialize the zoom window drawing area
      */
     void initZoomWindow();
+    
+    /**
+     * Load tablet mapping configuration from settings
+     */
+    void loadTabletMappingConfig();
     
     /**
      * Transform zoom window coordinates to page coordinates
