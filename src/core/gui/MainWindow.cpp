@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 
 #include <algorithm>
+#include <cctype>
 #include <regex>
 
 #include <gdk-pixbuf/gdk-pixbuf.h>  // for gdk_pixbuf_new_fr...
@@ -344,8 +345,8 @@ void MainWindow::initXournalWidget() {
                 if (type == GDK_BUTTON_PRESS) {
                     GdkEventButton* btnEvent = reinterpret_cast<GdkEventButton*>(event);
                     if (btnEvent->button == 1) {  // Left click only
-                        // Check if click is on the indicator
-                        if (gtk_xournal_point_in_indicator(widget, btnEvent->x, btnEvent->y)) {
+                        // Check if click is on the indicator's drag handle (bottom-right corner)
+                        if (gtk_xournal_point_in_indicator_corner(widget, btnEvent->x, btnEvent->y)) {
                             gtk_xournal_start_indicator_drag(widget, btnEvent->x, btnEvent->y);
                             self->indicatorDirectDragging = true;
                             return true;  // Consume the event
@@ -1074,8 +1075,45 @@ gboolean MainWindow::onZoomWindowKeyPress(GtkWidget* widget, GdkEventKey* event,
         return FALSE;
     }
     
-    // Use Alt+Arrow keys for movement (less likely to conflict)
-    if (!(event->state & GDK_MOD1_MASK)) {  // GDK_MOD1_MASK is Alt
+    // Check for tablet mapping toggle shortcut (works regardless of modifier)
+    if (self->matchesShortcut(event, "toggleTabletMappingShortcut")) {
+        if (TabletMapping::isAvailable()) {
+            // Toggle between full window and zoom window mapping
+            if (self->zoomWindowFocusMode) {
+                // Currently zoom mode, switch to full window
+                TabletMapping::setMappingMode(TabletMapping::MappingMode::FullWindow);
+                self->zoomWindowFocusMode = false;
+                if (self->zoomWindowBtnFocusAll) {
+                    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(self->zoomWindowBtnFocusAll), TRUE);
+                }
+                g_message("Tablet mapped to full window");
+            } else {
+                // Currently full window mode, switch to zoom mode
+                TabletMapping::setMappingMode(TabletMapping::MappingMode::ZoomWindow);
+                self->zoomWindowFocusMode = true;
+                if (self->zoomWindowBtnFocusZoom) {
+                    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(self->zoomWindowBtnFocusZoom), TRUE);
+                }
+                g_message("Tablet mapped to zoom window");
+            }
+        }
+        return TRUE;
+    }
+    
+    // Get the configured modifier for indicator movement
+    GdkModifierType requiredModifier = self->getIndicatorMoveModifier();
+    
+    // Check if the modifier requirement is met
+    bool modifierMet = false;
+    if (requiredModifier == 0) {
+        // No modifier required - but make sure no modifier is pressed to avoid conflicts
+        GdkModifierType relevantMods = static_cast<GdkModifierType>(GDK_CONTROL_MASK | GDK_MOD1_MASK);
+        modifierMet = !(event->state & relevantMods);
+    } else {
+        modifierMet = (event->state & requiredModifier) != 0;
+    }
+    
+    if (!modifierMet) {
         return FALSE;
     }
     
@@ -1110,7 +1148,9 @@ gboolean MainWindow::onZoomWindowKeyPress(GtkWidget* widget, GdkEventKey* event,
     double maxX = std::max(0.0, pageDisplayWidth - zoomWidth);
     double maxY = std::max(0.0, pageDisplayHeight - zoomHeight);
     
-    // Movement step size in pixels (hold Shift for larger steps)
+    // Movement step size in pixels
+    // Hold Shift for larger steps (works with any modifier, including when Shift is the movement modifier)
+    // When Shift is the movement modifier, steps are always large since Shift is always pressed
     double step = (event->state & GDK_SHIFT_MASK) ? 100.0 : 20.0;
     // Vertical step when wrapping (half the zoom window height)
     double wrapStepY = zoomHeight / 2.0;
@@ -1118,8 +1158,15 @@ gboolean MainWindow::onZoomWindowKeyPress(GtkWidget* widget, GdkEventKey* event,
     bool handled = false;
     bool pageChanged = false;
     
-    switch (event->keyval) {
-        case GDK_KEY_Left:
+    // Get customizable movement keys
+    guint keyLeft = self->getMovementKey("left");
+    guint keyRight = self->getMovementKey("right");
+    guint keyUp = self->getMovementKey("up");
+    guint keyDown = self->getMovementKey("down");
+    
+    guint pressedKey = gdk_keyval_to_lower(event->keyval);
+    
+    if (pressedKey == keyLeft) {
             self->zoomIndicatorPosX -= step;
             // Wrap to right side and move up if going past left edge
             if (self->zoomIndicatorPosX < 0) {
@@ -1137,8 +1184,7 @@ gboolean MainWindow::onZoomWindowKeyPress(GtkWidget* widget, GdkEventKey* event,
                 }
             }
             handled = true;
-            break;
-        case GDK_KEY_Right:
+    } else if (pressedKey == keyRight) {
             self->zoomIndicatorPosX += step;
             // Wrap to left side and move down if going past right edge
             if (self->zoomIndicatorPosX > maxX) {
@@ -1155,8 +1201,7 @@ gboolean MainWindow::onZoomWindowKeyPress(GtkWidget* widget, GdkEventKey* event,
                 }
             }
             handled = true;
-            break;
-        case GDK_KEY_Up:
+    } else if (pressedKey == keyUp) {
             self->zoomIndicatorPosY -= step;
             // If past top, go to previous page (bottom, same X)
             if (self->zoomIndicatorPosY < 0 && currentPage > 0) {
@@ -1168,8 +1213,7 @@ gboolean MainWindow::onZoomWindowKeyPress(GtkWidget* widget, GdkEventKey* event,
                 pageChanged = true;
             }
             handled = true;
-            break;
-        case GDK_KEY_Down:
+    } else if (pressedKey == keyDown) {
             self->zoomIndicatorPosY += step;
             // If past bottom, go to next page (top, same X)
             if (self->zoomIndicatorPosY > maxY && currentPage < pageCount - 1) {
@@ -1180,21 +1224,18 @@ gboolean MainWindow::onZoomWindowKeyPress(GtkWidget* widget, GdkEventKey* event,
                 pageChanged = true;
             }
             handled = true;
-            break;
-        case GDK_KEY_Home:
-            // Alt+Home: Jump to top-left
+    } else if (pressedKey == self->getMovementKey("home")) {
+            // Jump to top-left
             self->zoomIndicatorPosX = 0;
             self->zoomIndicatorPosY = 0;
             handled = true;
-            break;
-        case GDK_KEY_End:
-            // Alt+End: Jump to bottom-right
+    } else if (pressedKey == self->getMovementKey("end")) {
+            // Jump to bottom-right
             self->zoomIndicatorPosX = maxX;
             self->zoomIndicatorPosY = maxY;
             handled = true;
-            break;
-        case GDK_KEY_Page_Up:
-            // Alt+PageUp: Go to previous page
+    } else if (pressedKey == self->getMovementKey("pageUp")) {
+            // Go to previous page
             if (currentPage > 0) {
                 self->zoomWindowInternalPageChange = true;
                 self->zoomIndicatorPosX = 0;
@@ -1203,9 +1244,8 @@ gboolean MainWindow::onZoomWindowKeyPress(GtkWidget* widget, GdkEventKey* event,
                 pageChanged = true;
             }
             handled = true;
-            break;
-        case GDK_KEY_Page_Down:
-            // Alt+PageDown: Go to next page
+    } else if (pressedKey == self->getMovementKey("pageDown")) {
+            // Go to next page
             if (currentPage < pageCount - 1) {
                 self->zoomWindowInternalPageChange = true;
                 self->zoomIndicatorPosX = 0;
@@ -1214,9 +1254,6 @@ gboolean MainWindow::onZoomWindowKeyPress(GtkWidget* widget, GdkEventKey* event,
                 pageChanged = true;
             }
             handled = true;
-            break;
-        default:
-            break;
     }
     
     if (handled) {
@@ -1367,6 +1404,90 @@ void MainWindow::getZoomWindowSize(int& width, int& height) const {
     height = 350;  // Default value
     zoomWindow.getInt("width", width);
     zoomWindow.getInt("height", height);
+}
+
+GdkModifierType MainWindow::getIndicatorMoveModifier() const {
+    Settings* settings = control->getSettings();
+    SElement& zoomWindow = settings->getCustomElement("zoomWindow");
+    std::string modifier = "alt";
+    zoomWindow.getString("indicatorMoveModifier", modifier);
+    
+    if (modifier == "ctrl") {
+        return GDK_CONTROL_MASK;
+    } else if (modifier == "shift") {
+        return GDK_SHIFT_MASK;
+    } else if (modifier == "none") {
+        return static_cast<GdkModifierType>(0);
+    }
+    // Default to Alt
+    return GDK_MOD1_MASK;
+}
+
+bool MainWindow::matchesShortcut(GdkEventKey* event, const std::string& shortcutSetting) const {
+    Settings* settings = control->getSettings();
+    SElement& zoomWindow = settings->getCustomElement("zoomWindow");
+    std::string shortcut;
+    zoomWindow.getString(shortcutSetting, shortcut);
+    
+    if (shortcut.empty()) {
+        return false;
+    }
+    
+    // Parse the shortcut string using GTK's accelerator parser
+    guint accelKey = 0;
+    GdkModifierType accelMods = static_cast<GdkModifierType>(0);
+    gtk_accelerator_parse(shortcut.c_str(), &accelKey, &accelMods);
+    
+    if (accelKey == 0) {
+        return false;
+    }
+    
+    // Normalize the key to lowercase for comparison
+    guint eventKey = gdk_keyval_to_lower(event->keyval);
+    guint accelKeyLower = gdk_keyval_to_lower(accelKey);
+    
+    // Check if the modifiers match (ignoring lock keys like Caps Lock, Num Lock)
+    GdkModifierType relevantMods = static_cast<GdkModifierType>(GDK_CONTROL_MASK | GDK_SHIFT_MASK | GDK_MOD1_MASK);
+    GdkModifierType eventMods = static_cast<GdkModifierType>(event->state & relevantMods);
+    
+    return (eventKey == accelKeyLower) && (eventMods == accelMods);
+}
+
+guint MainWindow::getMovementKey(const std::string& direction) const {
+    Settings* settings = control->getSettings();
+    SElement& zoomWindow = settings->getCustomElement("zoomWindow");
+    std::string keyName;
+    std::string settingName = "movementKey" + direction.substr(0, 1);
+    // Capitalize first letter for setting name
+    if (!direction.empty()) {
+        settingName = "movementKey";
+        settingName += static_cast<char>(std::toupper(direction[0]));
+        settingName += direction.substr(1);
+    }
+    
+    zoomWindow.getString(settingName, keyName);
+    
+    // If no custom key is set, use defaults
+    if (keyName.empty()) {
+        if (direction == "left") return gdk_keyval_to_lower(GDK_KEY_Left);
+        if (direction == "right") return gdk_keyval_to_lower(GDK_KEY_Right);
+        if (direction == "up") return gdk_keyval_to_lower(GDK_KEY_Up);
+        if (direction == "down") return gdk_keyval_to_lower(GDK_KEY_Down);
+        if (direction == "home") return gdk_keyval_to_lower(GDK_KEY_Home);
+        if (direction == "end") return gdk_keyval_to_lower(GDK_KEY_End);
+        if (direction == "pageUp") return gdk_keyval_to_lower(GDK_KEY_Page_Up);
+        if (direction == "pageDown") return gdk_keyval_to_lower(GDK_KEY_Page_Down);
+        return 0;
+    }
+    
+    // Parse the key name using GTK's function
+    guint keyval = gdk_keyval_from_name(keyName.c_str());
+    if (keyval == GDK_KEY_VoidSymbol) {
+        // Try uppercase version
+        keyval = gdk_keyval_from_name(keyName.c_str());
+    }
+    
+    return gdk_keyval_to_lower(keyval);
 }
 
 void MainWindow::setGtkTouchscreenScrollingForDeviceMapping() {

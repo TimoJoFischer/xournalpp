@@ -110,6 +110,27 @@ bool gtk_xournal_point_in_indicator(GtkWidget* widget, double x, double y) {
            y <= xournal->zoomIndicatorY + xournal->zoomIndicatorHeight;
 }
 
+bool gtk_xournal_point_in_indicator_corner(GtkWidget* widget, double x, double y) {
+    g_return_val_if_fail(widget != nullptr, false);
+    g_return_val_if_fail(GTK_IS_XOURNAL(widget), false);
+    
+    GtkXournal* xournal = GTK_XOURNAL(widget);
+    if (!xournal->showZoomIndicator) {
+        return false;
+    }
+    
+    // Size of the drag handle in the bottom-right corner
+    const double handleSize = 24.0;
+    
+    double cornerX = xournal->zoomIndicatorX + xournal->zoomIndicatorWidth - handleSize;
+    double cornerY = xournal->zoomIndicatorY + xournal->zoomIndicatorHeight - handleSize;
+    
+    return x >= cornerX && 
+           x <= xournal->zoomIndicatorX + xournal->zoomIndicatorWidth &&
+           y >= cornerY && 
+           y <= xournal->zoomIndicatorY + xournal->zoomIndicatorHeight;
+}
+
 void gtk_xournal_start_indicator_drag(GtkWidget* widget, double x, double y) {
     g_return_if_fail(widget != nullptr);
     g_return_if_fail(GTK_IS_XOURNAL(widget));
@@ -394,6 +415,36 @@ static auto gtk_xournal_draw(GtkWidget* widget, cairo_t* cr) -> gboolean {
         cairo_rectangle(cr, xournal->zoomIndicatorX, xournal->zoomIndicatorY,
                         xournal->zoomIndicatorWidth, xournal->zoomIndicatorHeight);
         cairo_fill(cr);
+        
+        // Draw drag handle in bottom-right corner
+        const double handleSize = 24.0;
+        double handleX = xournal->zoomIndicatorX + xournal->zoomIndicatorWidth - handleSize;
+        double handleY = xournal->zoomIndicatorY + xournal->zoomIndicatorHeight - handleSize;
+        
+        // Filled corner triangle/area for the drag handle
+        cairo_set_source_rgba(cr, 0.0, 0.4, 1.0, 0.4);  // Slightly more opaque blue
+        cairo_move_to(cr, handleX + handleSize, handleY);
+        cairo_line_to(cr, handleX + handleSize, handleY + handleSize);
+        cairo_line_to(cr, handleX, handleY + handleSize);
+        cairo_close_path(cr);
+        cairo_fill(cr);
+        
+        // Draw diagonal lines in the corner to indicate it's draggable
+        cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);  // White lines
+        cairo_set_line_width(cr, 1.5);
+        
+        // Three diagonal lines
+        cairo_move_to(cr, handleX + handleSize - 6, handleY + handleSize);
+        cairo_line_to(cr, handleX + handleSize, handleY + handleSize - 6);
+        cairo_stroke(cr);
+        
+        cairo_move_to(cr, handleX + handleSize - 12, handleY + handleSize);
+        cairo_line_to(cr, handleX + handleSize, handleY + handleSize - 12);
+        cairo_stroke(cr);
+        
+        cairo_move_to(cr, handleX + handleSize - 18, handleY + handleSize);
+        cairo_line_to(cr, handleX + handleSize, handleY + handleSize - 18);
+        cairo_stroke(cr);
         
         cairo_restore(cr);
     }

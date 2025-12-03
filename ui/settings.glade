@@ -6956,6 +6956,237 @@ If available select &lt;small&gt;&lt;tt&gt;pulse&lt;/tt&gt;&lt;/small&gt; as inp
                                         <property name="position">2</property>
                                       </packing>
                                     </child>
+                                    <!-- Keyboard Shortcuts Section -->
+                                    <child>
+                                      <object class="GtkLabel" id="lblZoomWindowShortcutsHeader">
+                                        <property name="visible">True</property>
+                                        <property name="can-focus">False</property>
+                                        <property name="label" translatable="yes">&lt;b&gt;Keyboard Shortcuts&lt;/b&gt;</property>
+                                        <property name="use-markup">True</property>
+                                        <property name="xalign">0</property>
+                                        <property name="margin-top">12</property>
+                                      </object>
+                                      <packing>
+                                        <property name="expand">False</property>
+                                        <property name="fill">True</property>
+                                        <property name="position">3</property>
+                                      </packing>
+                                    </child>
+                                    <child>
+                                      <object class="GtkGrid" id="gridZoomWindowShortcuts">
+                                        <property name="visible">True</property>
+                                        <property name="can-focus">False</property>
+                                        <property name="row-spacing">6</property>
+                                        <property name="column-spacing">12</property>
+                                        <!-- Indicator Movement Modifier -->
+                                        <child>
+                                          <object class="GtkLabel" id="lblIndicatorMoveModifier">
+                                            <property name="visible">True</property>
+                                            <property name="can-focus">False</property>
+                                            <property name="halign">end</property>
+                                            <property name="label" translatable="yes">Movement Modifier</property>
+                                            <property name="tooltip-text" translatable="yes">Hold this modifier key + movement keys to move the zoom indicator</property>
+                                          </object>
+                                          <packing>
+                                            <property name="left-attach">0</property>
+                                            <property name="top-attach">0</property>
+                                          </packing>
+                                        </child>
+                                        <child>
+                                          <object class="GtkComboBoxText" id="cbIndicatorMoveModifier">
+                                            <property name="visible">True</property>
+                                            <property name="can-focus">True</property>
+                                            <items>
+                                              <item id="alt" translatable="yes">Alt</item>
+                                              <item id="ctrl" translatable="yes">Ctrl</item>
+                                              <item id="shift" translatable="yes">Shift</item>
+                                              <item id="none" translatable="yes">None (keys only)</item>
+                                            </items>
+                                          </object>
+                                          <packing>
+                                            <property name="left-attach">1</property>
+                                            <property name="top-attach">0</property>
+                                          </packing>
+                                        </child>
+                                        <child>
+                                          <object class="GtkLabel" id="lblIndicatorMoveDesc">
+                                            <property name="visible">True</property>
+                                            <property name="can-focus">False</property>
+                                            <property name="halign">start</property>
+                                            <property name="label" translatable="yes">+ movement keys (Shift for larger steps)</property>
+                                            <style>
+                                              <class name="dim-label"/>
+                                            </style>
+                                          </object>
+                                          <packing>
+                                            <property name="left-attach">2</property>
+                                            <property name="top-attach">0</property>
+                                          </packing>
+                                        </child>
+                                        <!-- Movement Keys Row -->
+                                        <child>
+                                          <object class="GtkLabel" id="lblMovementKeys">
+                                            <property name="visible">True</property>
+                                            <property name="can-focus">False</property>
+                                            <property name="halign">end</property>
+                                            <property name="label" translatable="yes">Movement Keys</property>
+                                            <property name="tooltip-text" translatable="yes">Keys for moving the indicator (Left, Right, Up, Down)</property>
+                                          </object>
+                                          <packing>
+                                            <property name="left-attach">0</property>
+                                            <property name="top-attach">1</property>
+                                          </packing>
+                                        </child>
+                                        <child>
+                                          <object class="GtkBox" id="boxMovementKeys">
+                                            <property name="visible">True</property>
+                                            <property name="can-focus">False</property>
+                                            <property name="spacing">6</property>
+                                            <child>
+                                              <object class="GtkLabel" id="lblKeyLeft">
+                                                <property name="visible">True</property>
+                                                <property name="can-focus">False</property>
+                                                <property name="label" translatable="yes">←</property>
+                                              </object>
+                                              <packing>
+                                                <property name="expand">False</property>
+                                                <property name="fill">False</property>
+                                                <property name="position">0</property>
+                                              </packing>
+                                            </child>
+                                            <child>
+                                              <object class="GtkEntry" id="txtKeyLeft">
+                                                <property name="visible">True</property>
+                                                <property name="can-focus">True</property>
+                                                <property name="width-chars">6</property>
+                                                <property name="placeholder-text">Left</property>
+                                                <property name="tooltip-text" translatable="yes">Key for moving left (e.g., Left, h, a)</property>
+                                              </object>
+                                              <packing>
+                                                <property name="expand">False</property>
+                                                <property name="fill">False</property>
+                                                <property name="position">1</property>
+                                              </packing>
+                                            </child>
+                                            <child>
+                                              <object class="GtkLabel" id="lblKeyRight">
+                                                <property name="visible">True</property>
+                                                <property name="can-focus">False</property>
+                                                <property name="label" translatable="yes">→</property>
+                                              </object>
+                                              <packing>
+                                                <property name="expand">False</property>
+                                                <property name="fill">False</property>
+                                                <property name="position">2</property>
+                                              </packing>
+                                            </child>
+                                            <child>
+                                              <object class="GtkEntry" id="txtKeyRight">
+                                                <property name="visible">True</property>
+                                                <property name="can-focus">True</property>
+                                                <property name="width-chars">6</property>
+                                                <property name="placeholder-text">Right</property>
+                                                <property name="tooltip-text" translatable="yes">Key for moving right (e.g., Right, l, d)</property>
+                                              </object>
+                                              <packing>
+                                                <property name="expand">False</property>
+                                                <property name="fill">False</property>
+                                                <property name="position">3</property>
+                                              </packing>
+                                            </child>
+                                            <child>
+                                              <object class="GtkLabel" id="lblKeyUp">
+                                                <property name="visible">True</property>
+                                                <property name="can-focus">False</property>
+                                                <property name="label" translatable="yes">↑</property>
+                                              </object>
+                                              <packing>
+                                                <property name="expand">False</property>
+                                                <property name="fill">False</property>
+                                                <property name="position">4</property>
+                                              </packing>
+                                            </child>
+                                            <child>
+                                              <object class="GtkEntry" id="txtKeyUp">
+                                                <property name="visible">True</property>
+                                                <property name="can-focus">True</property>
+                                                <property name="width-chars">6</property>
+                                                <property name="placeholder-text">Up</property>
+                                                <property name="tooltip-text" translatable="yes">Key for moving up (e.g., Up, k, w)</property>
+                                              </object>
+                                              <packing>
+                                                <property name="expand">False</property>
+                                                <property name="fill">False</property>
+                                                <property name="position">5</property>
+                                              </packing>
+                                            </child>
+                                            <child>
+                                              <object class="GtkLabel" id="lblKeyDown">
+                                                <property name="visible">True</property>
+                                                <property name="can-focus">False</property>
+                                                <property name="label" translatable="yes">↓</property>
+                                              </object>
+                                              <packing>
+                                                <property name="expand">False</property>
+                                                <property name="fill">False</property>
+                                                <property name="position">6</property>
+                                              </packing>
+                                            </child>
+                                            <child>
+                                              <object class="GtkEntry" id="txtKeyDown">
+                                                <property name="visible">True</property>
+                                                <property name="can-focus">True</property>
+                                                <property name="width-chars">6</property>
+                                                <property name="placeholder-text">Down</property>
+                                                <property name="tooltip-text" translatable="yes">Key for moving down (e.g., Down, j, s)</property>
+                                              </object>
+                                              <packing>
+                                                <property name="expand">False</property>
+                                                <property name="fill">False</property>
+                                                <property name="position">7</property>
+                                              </packing>
+                                            </child>
+                                          </object>
+                                          <packing>
+                                            <property name="left-attach">1</property>
+                                            <property name="top-attach">1</property>
+                                            <property name="width">2</property>
+                                          </packing>
+                                        </child>
+                                        <!-- Toggle Tablet Mapping Shortcut -->
+                                        <child>
+                                          <object class="GtkLabel" id="lblToggleTabletMappingShortcut">
+                                            <property name="visible">True</property>
+                                            <property name="can-focus">False</property>
+                                            <property name="halign">end</property>
+                                            <property name="label" translatable="yes">Toggle Tablet Mapping</property>
+                                            <property name="tooltip-text" translatable="yes">Shortcut to toggle tablet mapping between full window and zoom window</property>
+                                          </object>
+                                          <packing>
+                                            <property name="left-attach">0</property>
+                                            <property name="top-attach">2</property>
+                                          </packing>
+                                        </child>
+                                        <child>
+                                          <object class="GtkEntry" id="txtToggleTabletMappingShortcut">
+                                            <property name="visible">True</property>
+                                            <property name="can-focus">True</property>
+                                            <property name="placeholder-text" translatable="yes">e.g., &lt;Alt&gt;m or &lt;Ctrl&gt;&lt;Shift&gt;M</property>
+                                            <property name="tooltip-text" translatable="yes">Enter a keyboard shortcut like &lt;Alt&gt;m or &lt;Ctrl&gt;&lt;Shift&gt;M</property>
+                                          </object>
+                                          <packing>
+                                            <property name="left-attach">1</property>
+                                            <property name="top-attach">2</property>
+                                            <property name="width">2</property>
+                                          </packing>
+                                        </child>
+                                      </object>
+                                      <packing>
+                                        <property name="expand">False</property>
+                                        <property name="fill">True</property>
+                                        <property name="position">4</property>
+                                      </packing>
+                                    </child>
                                   </object>
                                 </child>
                                 <child type="label">

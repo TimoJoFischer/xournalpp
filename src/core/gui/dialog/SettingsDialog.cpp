@@ -742,6 +742,25 @@ void SettingsDialog::load() {
     gtk_spin_button_set_value(GTK_SPIN_BUTTON(builder.get("spZoomWindowWidth")), zoomWidth);
     gtk_spin_button_set_value(GTK_SPIN_BUTTON(builder.get("spZoomWindowHeight")), zoomHeight);
 
+    // Keyboard shortcuts for zoom window
+    string indicatorMoveModifier = "alt";
+    string toggleTabletMappingShortcut = "<Alt>m";
+    zoomWindow.getString("indicatorMoveModifier", indicatorMoveModifier);
+    zoomWindow.getString("toggleTabletMappingShortcut", toggleTabletMappingShortcut);
+    gtk_combo_box_set_active_id(GTK_COMBO_BOX(builder.get("cbIndicatorMoveModifier")), indicatorMoveModifier.c_str());
+    gtk_editable_set_text(GTK_EDITABLE(builder.get("txtToggleTabletMappingShortcut")), toggleTabletMappingShortcut.c_str());
+
+    // Movement keys (empty means use default arrow keys)
+    string keyLeft, keyRight, keyUp, keyDown;
+    zoomWindow.getString("movementKeyLeft", keyLeft);
+    zoomWindow.getString("movementKeyRight", keyRight);
+    zoomWindow.getString("movementKeyUp", keyUp);
+    zoomWindow.getString("movementKeyDown", keyDown);
+    gtk_editable_set_text(GTK_EDITABLE(builder.get("txtKeyLeft")), keyLeft.c_str());
+    gtk_editable_set_text(GTK_EDITABLE(builder.get("txtKeyRight")), keyRight.c_str());
+    gtk_editable_set_text(GTK_EDITABLE(builder.get("txtKeyUp")), keyUp.c_str());
+    gtk_editable_set_text(GTK_EDITABLE(builder.get("txtKeyDown")), keyDown.c_str());
+
     // Tablet Mapping Settings (Linux KDE)
     SElement& tabletMapping = settings->getCustomElement("tabletMapping");
     
@@ -1202,6 +1221,17 @@ void SettingsDialog::save() {
     zoomWindow.setDouble("zoomFactor", gtk_spin_button_get_value(GTK_SPIN_BUTTON(builder.get("spZoomWindowFactor"))));
     zoomWindow.setInt("width", static_cast<int>(gtk_spin_button_get_value(GTK_SPIN_BUTTON(builder.get("spZoomWindowWidth")))));
     zoomWindow.setInt("height", static_cast<int>(gtk_spin_button_get_value(GTK_SPIN_BUTTON(builder.get("spZoomWindowHeight")))));
+
+    // Keyboard shortcuts for zoom window
+    const gchar* modifierId = gtk_combo_box_get_active_id(GTK_COMBO_BOX(builder.get("cbIndicatorMoveModifier")));
+    zoomWindow.setString("indicatorMoveModifier", modifierId ? modifierId : "alt");
+    zoomWindow.setString("toggleTabletMappingShortcut", gtk_editable_get_text(GTK_EDITABLE(builder.get("txtToggleTabletMappingShortcut"))));
+
+    // Movement keys (store exactly as entered, empty means use defaults)
+    zoomWindow.setString("movementKeyLeft", gtk_editable_get_text(GTK_EDITABLE(builder.get("txtKeyLeft"))));
+    zoomWindow.setString("movementKeyRight", gtk_editable_get_text(GTK_EDITABLE(builder.get("txtKeyRight"))));
+    zoomWindow.setString("movementKeyUp", gtk_editable_get_text(GTK_EDITABLE(builder.get("txtKeyUp"))));
+    zoomWindow.setString("movementKeyDown", gtk_editable_get_text(GTK_EDITABLE(builder.get("txtKeyDown"))));
 
     // Tablet Mapping Settings (Linux KDE)
     SElement& tabletMapping = settings->getCustomElement("tabletMapping");

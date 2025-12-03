@@ -110,6 +110,11 @@ void gtk_xournal_set_zoom_indicator(GtkWidget* widget, bool show, double x, doub
 bool gtk_xournal_point_in_indicator(GtkWidget* widget, double x, double y);
 
 /**
+ * Check if a point is inside the zoom indicator's drag handle (bottom-right corner)
+ */
+bool gtk_xournal_point_in_indicator_corner(GtkWidget* widget, double x, double y);
+
+/**
  * Start dragging the indicator from a given point
  */
 void gtk_xournal_start_indicator_drag(GtkWidget* widget, double x, double y);

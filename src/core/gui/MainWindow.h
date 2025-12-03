@@ -273,6 +273,7 @@ private:
      */
     static gboolean onZoomWindowButtonPress(GtkWidget* widget, GdkEventButton* event, MainWindow* self);
     
+    
     /**
      * Callback for button release events in the zoom window
      */
@@ -287,4 +288,25 @@ private:
      * Callback for key press events in the zoom window
      */
     static gboolean onZoomWindowKeyPress(GtkWidget* widget, GdkEventKey* event, MainWindow* self);
+
+    /**
+     * Get the modifier mask for indicator movement from settings
+     */
+    GdkModifierType getIndicatorMoveModifier() const;
+
+    /**
+     * Check if a keyboard event matches a configured shortcut
+     * @param event The key event to check
+     * @param shortcutSetting The name of the shortcut setting (e.g., "mapFullWindowShortcut")
+     * @return true if the event matches the shortcut
+     */
+    bool matchesShortcut(GdkEventKey* event, const std::string& shortcutSetting) const;
+
+    /**
+     * Get the configured key for a movement direction
+     * @param direction One of: "left", "right", "up", "down", "home", "end", "pageUp", "pageDown"
+     * @return The GDK keyval (lowercase) for the configured key
+     */
+    guint getMovementKey(const std::string& direction) const;
 };
+
