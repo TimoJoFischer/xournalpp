@@ -735,12 +735,15 @@ void SettingsDialog::load() {
     double zoomFactor = 1.5;
     int zoomWidth = 560;
     int zoomHeight = 360;
+    bool directMappingMode = false;
     zoomWindow.getDouble("zoomFactor", zoomFactor);
     zoomWindow.getInt("width", zoomWidth);
     zoomWindow.getInt("height", zoomHeight);
+    zoomWindow.getBool("directMappingMode", directMappingMode);
     gtk_spin_button_set_value(GTK_SPIN_BUTTON(builder.get("spZoomWindowFactor")), zoomFactor);
     gtk_spin_button_set_value(GTK_SPIN_BUTTON(builder.get("spZoomWindowWidth")), zoomWidth);
     gtk_spin_button_set_value(GTK_SPIN_BUTTON(builder.get("spZoomWindowHeight")), zoomHeight);
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(builder.get("cbDirectMappingMode")), directMappingMode);
 
     // Keyboard shortcuts for zoom window
     string indicatorMoveModifier = "alt";
@@ -1221,6 +1224,7 @@ void SettingsDialog::save() {
     zoomWindow.setDouble("zoomFactor", gtk_spin_button_get_value(GTK_SPIN_BUTTON(builder.get("spZoomWindowFactor"))));
     zoomWindow.setInt("width", static_cast<int>(gtk_spin_button_get_value(GTK_SPIN_BUTTON(builder.get("spZoomWindowWidth")))));
     zoomWindow.setInt("height", static_cast<int>(gtk_spin_button_get_value(GTK_SPIN_BUTTON(builder.get("spZoomWindowHeight")))));
+    zoomWindow.setBool("directMappingMode", gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(builder.get("cbDirectMappingMode"))));
 
     // Keyboard shortcuts for zoom window
     const gchar* modifierId = gtk_combo_box_get_active_id(GTK_COMBO_BOX(builder.get("cbIndicatorMoveModifier")));

@@ -97,17 +97,29 @@ public:
      * Mapping mode for the tablet.
      */
     enum class MappingMode {
-        FullWindow,   // Map tablet to entire application window
-        ZoomWindow    // Map tablet to zoom window region only
+        FullWindow,        // Map tablet to entire application window
+        ZoomWindow,        // Map tablet to zoom window region only
+        IndicatorMapping   // Map tablet to dynamic indicator position (for direct mode)
     };
 
     /**
      * Set the tablet mapping mode.
      * 
-     * @param mode The desired mapping mode (FullWindow or ZoomWindow)
+     * @param mode The desired mapping mode (FullWindow, ZoomWindow, or IndicatorMapping)
      * @return true if the mapping was successfully applied, false otherwise
      */
     static bool setMappingMode(MappingMode mode);
+
+    /**
+     * Set a dynamic output area for IndicatorMapping mode.
+     * This is used for direct mapping mode where the indicator position changes dynamically.
+     * 
+     * @param x X position on screen (normalized 0-1)
+     * @param y Y position on screen (normalized 0-1)
+     * @param width Width of the area (normalized 0-1)
+     * @param height Height of the area (normalized 0-1)
+     */
+    static void setDynamicOutputArea(double x, double y, double width, double height);
 
     /**
      * Set the Linux KDE configuration.

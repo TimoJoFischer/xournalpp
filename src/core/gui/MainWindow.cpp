@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <regex>
 
 #include <gdk-pixbuf/gdk-pixbuf.h>  // for gdk_pixbuf_new_fr...
@@ -335,8 +336,20 @@ void MainWindow::initXournalWidget() {
                 auto* self = static_cast<MainWindow*>(userData);
                 GtkWidget* widget = self->xournal->getWidget();
                 
-                // Only handle if zoom window is visible
-                if (!self->zoomWindowFrame || !gtk_widget_get_visible(self->zoomWindowFrame)) {
+                // Check if we're in direct mapping mode
+                bool directMode = self->isDirectMappingMode();
+                
+                // Determine if indicator should be visible/interactive
+                bool indicatorActive = false;
+                if (directMode) {
+                    // In direct mode, indicator is active when zoomWindowFocusMode is true
+                    indicatorActive = self->zoomWindowFocusMode;
+                } else {
+                    // In normal mode, indicator is active when zoom window frame is visible
+                    indicatorActive = self->zoomWindowFrame && gtk_widget_get_visible(self->zoomWindowFrame);
+                }
+                
+                if (!indicatorActive) {
                     return false;
                 }
                 
@@ -365,10 +378,16 @@ void MainWindow::initXournalWidget() {
                     double zoomFactor = self->getZoomWindowFactor();
                     int defaultWidth, defaultHeight;
                     self->getZoomWindowSize(defaultWidth, defaultHeight);
-                    int zoomWidth = gtk_widget_get_allocated_width(self->zoomWindowDrawingArea);
-                    int zoomHeight = gtk_widget_get_allocated_height(self->zoomWindowDrawingArea);
-                    if (zoomWidth <= 0) zoomWidth = defaultWidth;
-                    if (zoomHeight <= 0) zoomHeight = defaultHeight;
+                    int zoomWidth = defaultWidth;
+                    int zoomHeight = defaultHeight;
+                    
+                    // In normal mode, try to get actual allocated size from zoom window
+                    if (!directMode && self->zoomWindowDrawingArea) {
+                        int allocWidth = gtk_widget_get_allocated_width(self->zoomWindowDrawingArea);
+                        int allocHeight = gtk_widget_get_allocated_height(self->zoomWindowDrawingArea);
+                        if (allocWidth > 0) zoomWidth = allocWidth;
+                        if (allocHeight > 0) zoomHeight = allocHeight;
+                    }
                     double visibleWidth = zoomWidth / zoomFactor;
                     double visibleHeight = zoomHeight / zoomFactor;
                     
@@ -409,8 +428,16 @@ void MainWindow::initXournalWidget() {
                         static_cast<int>(visibleWidth),
                         static_cast<int>(visibleHeight));
                     
-                    // Redraw the zoom window
-                    gtk_widget_queue_draw(self->zoomWindowDrawingArea);
+                    // Schedule delayed tablet mapping update in direct mode
+                    // This avoids excessive updates during continuous dragging
+                    if (directMode) {
+                        self->scheduleIndicatorMappingUpdate();
+                    }
+                    
+                    // Redraw the zoom window (only in normal mode)
+                    if (!directMode && self->zoomWindowDrawingArea) {
+                        gtk_widget_queue_draw(self->zoomWindowDrawingArea);
+                    }
                     gtk_widget_queue_draw(widget);
                     
                     return true;  // Consume the event
@@ -437,6 +464,9 @@ void MainWindow::initZoomWindow() {
     zoomWindowBtnFocusAll = get("zoomWindowBtnFocusAll");
     zoomWindowBtnDrag = get("zoomWindowBtnDrag");
     
+    // Check if we're in direct mapping mode (second setup - no zoom window)
+    bool directMode = isDirectMappingMode();
+    
     // Set zoom window size from settings
     int zoomWidth, zoomHeight;
     getZoomWindowSize(zoomWidth, zoomHeight);
@@ -446,6 +476,16 @@ void MainWindow::initZoomWindow() {
     if (zoomWindowFrame) {
         // Frame is slightly taller to accommodate the toolbar
         gtk_widget_set_size_request(zoomWindowFrame, zoomWidth, zoomHeight + 10);
+        
+        // In direct mapping mode, hide the zoom window frame entirely
+        if (directMode) {
+            gtk_widget_hide(zoomWindowFrame);
+        }
+    }
+    
+    // In direct mapping mode, also hide the maximize button since we don't use the zoom window
+    if (directMode && zoomWindowBtnMaximize) {
+        gtk_widget_hide(zoomWindowBtnMaximize);
     }
     
     // Load tablet mapping configuration from settings
@@ -453,9 +493,15 @@ void MainWindow::initZoomWindow() {
     
     // Apply full window tablet mapping at startup
     // This ensures the tablet is mapped to the full window when Xournal++ starts
+    // In direct mode, also start with full window mapping (indicator hidden)
     if (TabletMapping::isAvailable()) {
         TabletMapping::setMappingMode(TabletMapping::MappingMode::FullWindow);
         g_message("TabletMapping: Applied full window mapping at startup");
+    }
+    
+    // In direct mode, start with focus mode = false (full window, no indicator)
+    if (directMode) {
+        zoomWindowFocusMode = false;
     }
     
     // Set up minimize button
@@ -710,57 +756,77 @@ void MainWindow::initZoomWindow() {
         // Set up a timer to periodically refresh the zoom window and update the indicator
         g_timeout_add(100, +[](gpointer data) -> gboolean {
             auto* self = static_cast<MainWindow*>(data);
-            // Check if zoom window frame is visible (not minimized)
-            bool zoomVisible = self->zoomWindowFrame && gtk_widget_get_visible(self->zoomWindowFrame) &&
+            
+            // Check if we're in direct mapping mode (no zoom window)
+            bool directMode = self->isDirectMappingMode();
+            
+            // Check if zoom window frame is visible (not minimized) - only relevant in normal mode
+            bool zoomVisible = !directMode && self->zoomWindowFrame && 
+                               gtk_widget_get_visible(self->zoomWindowFrame) &&
                                self->zoomWindowDrawingArea && gtk_widget_get_visible(self->zoomWindowDrawingArea);
+            
+            // In direct mode, indicator visibility is controlled by zoomWindowFocusMode
+            // (true = show indicator and map to indicator, false = hide indicator and map to full window)
+            bool showIndicator = directMode ? self->zoomWindowFocusMode : zoomVisible;
+            
             if (zoomVisible) {
                 gtk_widget_queue_draw(self->zoomWindowDrawingArea);
-                
-                // Update the zoom indicator rectangle on the main canvas
-                if (self->xournal) {
-                    size_t currentPage = self->xournal->getCurrentPage();
-                    if (currentPage != npos) {
-                        XojPageView* pageView = self->xournal->getViewFor(currentPage);
-                        if (pageView) {
-                            double pageDisplayWidth = pageView->getDisplayWidthDouble();
-                            double pageDisplayHeight = pageView->getDisplayHeightDouble();
-                            
-                            // Zoom window dimensions from settings (use defaults if not yet allocated)
-                            double zoomFactor = self->getZoomWindowFactor();
-                            int defaultWidth, defaultHeight;
-                            self->getZoomWindowSize(defaultWidth, defaultHeight);
-                            int zoomWidth = gtk_widget_get_allocated_width(self->zoomWindowDrawingArea);
-                            int zoomHeight = gtk_widget_get_allocated_height(self->zoomWindowDrawingArea);
-                            if (zoomWidth <= 0) zoomWidth = defaultWidth;
-                            if (zoomHeight <= 0) zoomHeight = defaultHeight;
-                            
-                            // Apply magnification factor
-                            // The visible area in page display coordinates is smaller than the zoom window size
-                            double indicatorWidth = static_cast<double>(zoomWidth) / zoomFactor;
-                            double indicatorHeight = static_cast<double>(zoomHeight) / zoomFactor;
-                            
-                            // Use stored position (can be moved with arrow keys)
-                            double indicatorX = self->zoomIndicatorPosX;
-                            double indicatorY = self->zoomIndicatorPosY;
-                            
-                            // Clamp to page bounds
-                            indicatorX = std::max(0.0, std::min(indicatorX, pageDisplayWidth - indicatorWidth));
-                            indicatorY = std::max(0.0, std::min(indicatorY, pageDisplayHeight - indicatorHeight));
-                            
-                            // Add page offset for drawing on the xournal widget
-                            double drawX = indicatorX + pageView->getX();
-                            double drawY = indicatorY + pageView->getY();
-                            
-                            gtk_xournal_set_zoom_indicator(self->xournal->getWidget(), true,
-                                                          drawX, drawY, indicatorWidth, indicatorHeight);
+            }
+            
+            // Update the indicator on the main canvas
+            if (showIndicator && self->xournal) {
+                size_t currentPage = self->xournal->getCurrentPage();
+                if (currentPage != npos) {
+                    XojPageView* pageView = self->xournal->getViewFor(currentPage);
+                    if (pageView) {
+                        double pageDisplayWidth = pageView->getDisplayWidthDouble();
+                        double pageDisplayHeight = pageView->getDisplayHeightDouble();
+                        
+                        // Zoom window dimensions from settings (use defaults if not yet allocated)
+                        double zoomFactor = self->getZoomWindowFactor();
+                        int defaultWidth, defaultHeight;
+                        self->getZoomWindowSize(defaultWidth, defaultHeight);
+                        int zoomWidth = defaultWidth;
+                        int zoomHeight = defaultHeight;
+                        
+                        // In normal mode, try to get actual allocated size
+                        if (!directMode && self->zoomWindowDrawingArea) {
+                            int allocWidth = gtk_widget_get_allocated_width(self->zoomWindowDrawingArea);
+                            int allocHeight = gtk_widget_get_allocated_height(self->zoomWindowDrawingArea);
+                            if (allocWidth > 0) zoomWidth = allocWidth;
+                            if (allocHeight > 0) zoomHeight = allocHeight;
                         }
+                        
+                        // Apply magnification factor
+                        // The visible area in page display coordinates is smaller than the zoom window size
+                        double indicatorWidth = static_cast<double>(zoomWidth) / zoomFactor;
+                        double indicatorHeight = static_cast<double>(zoomHeight) / zoomFactor;
+                        
+                        // Use stored position (can be moved with arrow keys)
+                        double indicatorX = self->zoomIndicatorPosX;
+                        double indicatorY = self->zoomIndicatorPosY;
+                        
+                        // Clamp to page bounds
+                        indicatorX = std::max(0.0, std::min(indicatorX, pageDisplayWidth - indicatorWidth));
+                        indicatorY = std::max(0.0, std::min(indicatorY, pageDisplayHeight - indicatorHeight));
+                        
+                        // Add page offset for drawing on the xournal widget
+                        double drawX = indicatorX + pageView->getX();
+                        double drawY = indicatorY + pageView->getY();
+                        
+                        gtk_xournal_set_zoom_indicator(self->xournal->getWidget(), true,
+                                                      drawX, drawY, indicatorWidth, indicatorHeight);
+                        
+                        // Note: Tablet mapping updates are NOT triggered here from the periodic timer.
+                        // Instead, they are scheduled via scheduleIndicatorMappingUpdate() only when
+                        // the user actually moves the indicator (via keyboard or mouse dragging).
+                        // This prevents constant rescheduling that would prevent the delayed update
+                        // from ever firing.
                     }
                 }
-            } else {
-                // Hide the indicator when zoom window is not visible
-                if (self->xournal) {
-                    gtk_xournal_set_zoom_indicator(self->xournal->getWidget(), false, 0, 0, 0, 0);
-                }
+            } else if (!showIndicator && self->xournal) {
+                // Hide the indicator
+                gtk_xournal_set_zoom_indicator(self->xournal->getWidget(), false, 0, 0, 0, 0);
             }
             return G_SOURCE_CONTINUE;
         }, this);
@@ -1070,34 +1136,54 @@ gboolean MainWindow::onZoomWindowMotion(GtkWidget* widget, GdkEventMotion* event
 }
 
 gboolean MainWindow::onZoomWindowKeyPress(GtkWidget* widget, GdkEventKey* event, MainWindow* self) {
-    // Only handle if zoom window is visible
-    if (!self->zoomWindowDrawingArea || !gtk_widget_get_visible(self->zoomWindowDrawingArea)) {
-        return FALSE;
+    // Check if we're in direct mapping mode
+    bool directMode = self->isDirectMappingMode();
+    
+    // In normal mode, only handle if zoom window is visible
+    // In direct mode, always handle since there's no zoom window
+    if (!directMode) {
+        if (!self->zoomWindowDrawingArea || !gtk_widget_get_visible(self->zoomWindowDrawingArea)) {
+            return FALSE;
+        }
     }
     
     // Check for tablet mapping toggle shortcut (works regardless of modifier)
     if (self->matchesShortcut(event, "toggleTabletMappingShortcut")) {
         if (TabletMapping::isAvailable()) {
-            // Toggle between full window and zoom window mapping
+            // Toggle between full window and indicator/zoom window mapping
             if (self->zoomWindowFocusMode) {
-                // Currently zoom mode, switch to full window
+                // Currently indicator/zoom mode, switch to full window
                 TabletMapping::setMappingMode(TabletMapping::MappingMode::FullWindow);
                 self->zoomWindowFocusMode = false;
-                if (self->zoomWindowBtnFocusAll) {
+                if (!directMode && self->zoomWindowBtnFocusAll) {
                     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(self->zoomWindowBtnFocusAll), TRUE);
                 }
-                g_message("Tablet mapped to full window");
+                // In direct mode, the indicator will be hidden by the timer callback
+                g_message("Tablet mapped to full window%s", directMode ? " (indicator hidden)" : "");
             } else {
-                // Currently full window mode, switch to zoom mode
-                TabletMapping::setMappingMode(TabletMapping::MappingMode::ZoomWindow);
+                // Currently full window mode, switch to indicator/zoom mode
+                if (directMode) {
+                    // In direct mode, map to indicator position
+                    self->updateDynamicIndicatorMapping();
+                    TabletMapping::setMappingMode(TabletMapping::MappingMode::IndicatorMapping);
+                } else {
+                    TabletMapping::setMappingMode(TabletMapping::MappingMode::ZoomWindow);
+                }
                 self->zoomWindowFocusMode = true;
-                if (self->zoomWindowBtnFocusZoom) {
+                if (!directMode && self->zoomWindowBtnFocusZoom) {
                     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(self->zoomWindowBtnFocusZoom), TRUE);
                 }
-                g_message("Tablet mapped to zoom window");
+                // In direct mode, the indicator will be shown by the timer callback
+                g_message("Tablet mapped to %s", directMode ? "indicator window" : "zoom window");
             }
         }
         return TRUE;
+    }
+    
+    // For indicator movement, require the indicator to be visible (or zoom window in normal mode)
+    // In direct mode, only allow movement when indicator is visible (zoomWindowFocusMode = true)
+    if (directMode && !self->zoomWindowFocusMode) {
+        return FALSE;
     }
     
     // Get the configured modifier for indicator movement
@@ -1270,6 +1356,12 @@ gboolean MainWindow::onZoomWindowKeyPress(GtkWidget* widget, GdkEventKey* event,
             self->zoomIndicatorPosY = std::max(0.0, std::min(self->zoomIndicatorPosY, maxY));
         }
         
+        // Schedule delayed tablet mapping update in direct mode
+        // This avoids excessive updates during continuous keyboard movement
+        if (directMode) {
+            self->scheduleIndicatorMappingUpdate();
+        }
+        
         // Ensure the indicator rectangle is visible in the main view
         // Note: when page changed, pageView is the old page, but ensureRectIsVisible
         // will be called again by the timer with correct coordinates
@@ -1389,6 +1481,102 @@ void MainWindow::loadTabletMappingConfig() {
     }
 }
 
+void MainWindow::updateDynamicIndicatorMapping() {
+    // Only relevant in direct mapping mode with focus mode enabled
+    if (!isDirectMappingMode() || !zoomWindowFocusMode) {
+        return;
+    }
+    
+    if (!this->xournal || !this->winXournal) {
+        return;
+    }
+    
+    // Get the XojWidget reference
+    GtkWidget* xojWidget = this->xournal->getWidget();
+    if (!xojWidget) {
+        return;
+    }
+    
+    // Get the indicator position in widget coordinates
+    GtkXournal* xoj = GTK_XOURNAL(xojWidget);
+    double indicatorWidgetX = xoj->zoomIndicatorX;
+    double indicatorWidgetY = xoj->zoomIndicatorY;
+    
+    // Check if position has changed significantly (more than 1 pixel)
+    // to avoid redundant mapping updates
+    double threshold = 1.0;
+    if (std::abs(indicatorWidgetX - lastMappedIndicatorX) < threshold &&
+        std::abs(indicatorWidgetY - lastMappedIndicatorY) < threshold) {
+        return;  // Position hasn't changed enough, skip update
+    }
+    
+    // Update last mapped position
+    lastMappedIndicatorX = indicatorWidgetX;
+    lastMappedIndicatorY = indicatorWidgetY;
+    
+    // Get indicator size
+    int zoomWidth, zoomHeight;
+    getZoomWindowSize(zoomWidth, zoomHeight);
+    double zoomFactor = getZoomWindowFactor();
+    double indicatorWidth = zoomWidth / zoomFactor;
+    double indicatorHeight = zoomHeight / zoomFactor;
+    
+    // Convert widget coordinates to screen coordinates
+    // First get the widget's root coordinates
+    GdkWindow* gdkWindow = gtk_widget_get_window(xojWidget);
+    if (!gdkWindow) {
+        return;
+    }
+    
+    int rootX, rootY;
+    gdk_window_get_root_coords(gdkWindow, 0, 0, &rootX, &rootY);
+    
+    // Add the indicator position within the widget
+    double screenX = rootX + indicatorWidgetX;
+    double screenY = rootY + indicatorWidgetY;
+    
+    // Get screen dimensions to convert to normalized coordinates (0-1)
+    GdkScreen* screen = gdk_screen_get_default();
+    if (!screen) {
+        return;
+    }
+    
+    int screenWidth = gdk_screen_get_width(screen);
+    int screenHeight = gdk_screen_get_height(screen);
+    
+    if (screenWidth <= 0 || screenHeight <= 0) {
+        return;
+    }
+    
+    // Convert to normalized coordinates (0-1)
+    double normalizedX = screenX / screenWidth;
+    double normalizedY = screenY / screenHeight;
+    double normalizedWidth = indicatorWidth / screenWidth;
+    double normalizedHeight = indicatorHeight / screenHeight;
+    
+    // Update tablet mapping with new indicator position
+    TabletMapping::setDynamicOutputArea(normalizedX, normalizedY, normalizedWidth, normalizedHeight);
+    g_debug("TabletMapping: Updated dynamic indicator area to (%.4f, %.4f, %.4f, %.4f)",
+            normalizedX, normalizedY, normalizedWidth, normalizedHeight);
+}
+
+void MainWindow::scheduleIndicatorMappingUpdate() {
+    // Cancel any pending update timer
+    if (mappingUpdateTimerId != 0) {
+        g_source_remove(mappingUpdateTimerId);
+        mappingUpdateTimerId = 0;
+    }
+    
+    // Schedule a new update after 200ms delay
+    // This ensures mapping only updates after movement has stopped
+    mappingUpdateTimerId = g_timeout_add(200, +[](gpointer data) -> gboolean {
+        auto* self = static_cast<MainWindow*>(data);
+        self->mappingUpdateTimerId = 0;
+        self->updateDynamicIndicatorMapping();
+        return G_SOURCE_REMOVE;  // One-shot timer
+    }, this);
+}
+
 double MainWindow::getZoomWindowFactor() const {
     Settings* settings = control->getSettings();
     SElement& zoomWindow = settings->getCustomElement("zoomWindow");
@@ -1404,6 +1592,14 @@ void MainWindow::getZoomWindowSize(int& width, int& height) const {
     height = 350;  // Default value
     zoomWindow.getInt("width", width);
     zoomWindow.getInt("height", height);
+}
+
+bool MainWindow::isDirectMappingMode() const {
+    Settings* settings = control->getSettings();
+    SElement& zoomWindow = settings->getCustomElement("zoomWindow");
+    bool directMode = false;  // Default: use zoom window (first setup)
+    zoomWindow.getBool("directMappingMode", directMode);
+    return directMode;
 }
 
 GdkModifierType MainWindow::getIndicatorMoveModifier() const {

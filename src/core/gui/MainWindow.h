@@ -140,6 +140,18 @@ public:
      * Load tablet mapping configuration from settings
      */
     void loadTabletMappingConfig();
+    
+    /**
+     * Update dynamic indicator area for tablet mapping in direct mode.
+     * Converts indicator widget position to screen coordinates and updates TabletMapping.
+     */
+    void updateDynamicIndicatorMapping();
+    
+    /**
+     * Schedule a delayed update of indicator mapping.
+     * Used to avoid excessive updates during dragging - only applies mapping after movement stops.
+     */
+    void scheduleIndicatorMappingUpdate();
 
 private:
     void initXournalWidget();
@@ -242,6 +254,13 @@ private:
     
     // Indicator direct dragging (on main view)
     bool indicatorDirectDragging = false;
+    
+    // Last mapped indicator position (to avoid redundant mapping updates)
+    double lastMappedIndicatorX = -1.0;
+    double lastMappedIndicatorY = -1.0;
+    
+    // Timer for delayed mapping update (only update after movement stops)
+    guint mappingUpdateTimerId = 0;
 
     /**
      * Initialize the zoom window drawing area
@@ -257,6 +276,13 @@ private:
      * Get the zoom window dimensions from settings
      */
     void getZoomWindowSize(int& width, int& height) const;
+    
+    /**
+     * Check if direct mapping mode is enabled (second setup - no zoom window)
+     * In direct mode, the tablet maps directly to the indicator area on the main canvas
+     * without displaying a separate zoom window.
+     */
+    bool isDirectMappingMode() const;
     
     /**
      * Transform zoom window coordinates to page coordinates

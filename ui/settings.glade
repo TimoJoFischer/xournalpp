@@ -6831,6 +6831,21 @@ If available select &lt;small&gt;&lt;tt&gt;pulse&lt;/tt&gt;&lt;/small&gt; as inp
                                         <property name="position">1</property>
                                       </packing>
                                     </child>
+                                    <!-- Direct Mapping Mode Checkbox -->
+                                    <child>
+                                      <object class="GtkCheckButton" id="cbDirectMappingMode">
+                                        <property name="visible">True</property>
+                                        <property name="can-focus">True</property>
+                                        <property name="label" translatable="yes">Direct mapping mode (no zoom window)</property>
+                                        <property name="tooltip-text" translatable="yes">When enabled, the zoom window is hidden and tablet input maps directly to the indicator area on the main canvas. Toggle between indicator area and full window mapping using the keyboard shortcut.</property>
+                                        <property name="draw-indicator">True</property>
+                                      </object>
+                                      <packing>
+                                        <property name="expand">False</property>
+                                        <property name="fill">True</property>
+                                        <property name="position">2</property>
+                                      </packing>
+                                    </child>
                                     <child>
                                       <object class="GtkGrid" id="gridZoomWindowSettings">
                                         <property name="visible">True</property>
@@ -6953,7 +6968,7 @@ If available select &lt;small&gt;&lt;tt&gt;pulse&lt;/tt&gt;&lt;/small&gt; as inp
                                       <packing>
                                         <property name="expand">False</property>
                                         <property name="fill">True</property>
-                                        <property name="position">2</property>
+                                        <property name="position">3</property>
                                       </packing>
                                     </child>
                                     <!-- Keyboard Shortcuts Section -->
@@ -6969,7 +6984,7 @@ If available select &lt;small&gt;&lt;tt&gt;pulse&lt;/tt&gt;&lt;/small&gt; as inp
                                       <packing>
                                         <property name="expand">False</property>
                                         <property name="fill">True</property>
-                                        <property name="position">3</property>
+                                        <property name="position">4</property>
                                       </packing>
                                     </child>
                                     <child>

@@ -202,12 +202,32 @@ TabletMapping::WindowsConfig TabletMapping::windowsConfig = {
 // Current mapping state
 TabletMapping::MappingMode TabletMapping::currentMode = TabletMapping::MappingMode::FullWindow;
 
+// Dynamic output area for indicator (used in direct mapping mode)
+static double g_dynamicOutputX = 0.0;
+static double g_dynamicOutputY = 0.0;
+static double g_dynamicOutputWidth = 0.2;
+static double g_dynamicOutputHeight = 0.2;
+static bool g_useDynamicOutput = false;
+
 void TabletMapping::setLinuxKDEConfig(const LinuxKDEConfig& config) {
     linuxConfig = config;
 }
 
 void TabletMapping::setWindowsConfig(const WindowsConfig& config) {
     windowsConfig = config;
+}
+
+void TabletMapping::setDynamicOutputArea(double x, double y, double width, double height) {
+    g_dynamicOutputX = x;
+    g_dynamicOutputY = y;
+    g_dynamicOutputWidth = width;
+    g_dynamicOutputHeight = height;
+    g_useDynamicOutput = true;
+    
+    // If we're already in IndicatorMapping mode, apply the change immediately
+    if (currentMode == MappingMode::IndicatorMapping) {
+        setMappingMode(MappingMode::IndicatorMapping);
+    }
 }
 
 TabletMapping::LinuxKDEConfig TabletMapping::getLinuxKDEConfig() {
@@ -275,14 +295,22 @@ bool TabletMapping::applyLinuxKDEMapping(MappingMode mode) {
                      std::to_string(linuxConfig.fullOutputWidth) + "," +
                      std::to_string(linuxConfig.fullOutputHeight);
     } else {
+        // For ZoomWindow mode, use dynamic output if set (for direct mapping mode)
         inputArea = std::to_string(linuxConfig.zoomInputX) + "," +
                     std::to_string(linuxConfig.zoomInputY) + "," +
                     std::to_string(linuxConfig.zoomInputWidth) + "," +
                     std::to_string(linuxConfig.zoomInputHeight);
-        outputArea = std::to_string(linuxConfig.zoomOutputX) + "," +
-                     std::to_string(linuxConfig.zoomOutputY) + "," +
-                     std::to_string(linuxConfig.zoomOutputWidth) + "," +
-                     std::to_string(linuxConfig.zoomOutputHeight);
+        if (g_useDynamicOutput) {
+            outputArea = std::to_string(g_dynamicOutputX) + "," +
+                         std::to_string(g_dynamicOutputY) + "," +
+                         std::to_string(g_dynamicOutputWidth) + "," +
+                         std::to_string(g_dynamicOutputHeight);
+        } else {
+            outputArea = std::to_string(linuxConfig.zoomOutputX) + "," +
+                         std::to_string(linuxConfig.zoomOutputY) + "," +
+                         std::to_string(linuxConfig.zoomOutputWidth) + "," +
+                         std::to_string(linuxConfig.zoomOutputHeight);
+        }
     }
 
     // Build the command to update kcminputrc
@@ -388,6 +416,17 @@ bool TabletMapping::applyLinuxKDEMapping(MappingMode mode) {
             outY = linuxConfig.fullOutputY;
             outW = linuxConfig.fullOutputWidth;
             outH = linuxConfig.fullOutputHeight;
+        } else if (mode == MappingMode::IndicatorMapping && g_useDynamicOutput) {
+            // Use full input for IndicatorMapping mode
+            inX = linuxConfig.fullInputX;
+            inY = linuxConfig.fullInputY;
+            inW = linuxConfig.fullInputWidth;
+            inH = linuxConfig.fullInputHeight;
+            // Use dynamic output area (indicator position on screen)
+            outX = g_dynamicOutputX;
+            outY = g_dynamicOutputY;
+            outW = g_dynamicOutputWidth;
+            outH = g_dynamicOutputHeight;
         } else {
             inX = linuxConfig.zoomInputX;
             inY = linuxConfig.zoomInputY;
@@ -506,6 +545,17 @@ bool TabletMapping::applyWindowsMapping(MappingMode mode) {
         outY = windowsConfig.fullOutputY;
         outW = windowsConfig.fullOutputWidth;
         outH = windowsConfig.fullOutputHeight;
+    } else if (mode == MappingMode::IndicatorMapping && g_useDynamicOutput) {
+        // Use full input for IndicatorMapping mode
+        inX = windowsConfig.fullInputX;
+        inY = windowsConfig.fullInputY;
+        inW = windowsConfig.fullInputWidth;
+        inH = windowsConfig.fullInputHeight;
+        // Use dynamic output area (indicator position on screen)
+        outX = g_dynamicOutputX;
+        outY = g_dynamicOutputY;
+        outW = g_dynamicOutputWidth;
+        outH = g_dynamicOutputHeight;
     } else {
         inX = windowsConfig.zoomInputX;
         inY = windowsConfig.zoomInputY;
@@ -518,7 +568,8 @@ bool TabletMapping::applyWindowsMapping(MappingMode mode) {
     }
     
     g_message("TabletMapping: Mode=%s, Input=(%.2f,%.2f,%.2f,%.2f), Output=(%.2f,%.2f,%.2f,%.2f)",
-              mode == MappingMode::FullWindow ? "FullWindow" : "ZoomWindow",
+              mode == MappingMode::FullWindow ? "FullWindow" : 
+              (mode == MappingMode::IndicatorMapping ? "IndicatorMapping" : "ZoomWindow"),
               inX, inY, inW, inH, outX, outY, outW, outH);
     
     // If we already have a context, modify it
