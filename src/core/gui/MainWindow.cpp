@@ -1313,15 +1313,29 @@ void MainWindow::loadTabletMappingConfig() {
         windowsConfig.deviceId = deviceId;
         
         double value;
-        if (tabletMapping.getDouble("windowsFullLeft", value)) windowsConfig.fullLeft = value;
-        if (tabletMapping.getDouble("windowsFullTop", value)) windowsConfig.fullTop = value;
-        if (tabletMapping.getDouble("windowsFullRight", value)) windowsConfig.fullRight = value;
-        if (tabletMapping.getDouble("windowsFullBottom", value)) windowsConfig.fullBottom = value;
+        // Full window input area (portion of tablet to use)
+        if (tabletMapping.getDouble("windowsFullInputX", value)) windowsConfig.fullInputX = value;
+        if (tabletMapping.getDouble("windowsFullInputY", value)) windowsConfig.fullInputY = value;
+        if (tabletMapping.getDouble("windowsFullInputWidth", value)) windowsConfig.fullInputWidth = value;
+        if (tabletMapping.getDouble("windowsFullInputHeight", value)) windowsConfig.fullInputHeight = value;
         
-        if (tabletMapping.getDouble("windowsZoomLeft", value)) windowsConfig.zoomLeft = value;
-        if (tabletMapping.getDouble("windowsZoomTop", value)) windowsConfig.zoomTop = value;
-        if (tabletMapping.getDouble("windowsZoomRight", value)) windowsConfig.zoomRight = value;
-        if (tabletMapping.getDouble("windowsZoomBottom", value)) windowsConfig.zoomBottom = value;
+        // Full window output area (portion of screen to map to)
+        if (tabletMapping.getDouble("windowsFullOutputX", value)) windowsConfig.fullOutputX = value;
+        if (tabletMapping.getDouble("windowsFullOutputY", value)) windowsConfig.fullOutputY = value;
+        if (tabletMapping.getDouble("windowsFullOutputWidth", value)) windowsConfig.fullOutputWidth = value;
+        if (tabletMapping.getDouble("windowsFullOutputHeight", value)) windowsConfig.fullOutputHeight = value;
+        
+        // Zoom window input area (portion of tablet to use)
+        if (tabletMapping.getDouble("windowsZoomInputX", value)) windowsConfig.zoomInputX = value;
+        if (tabletMapping.getDouble("windowsZoomInputY", value)) windowsConfig.zoomInputY = value;
+        if (tabletMapping.getDouble("windowsZoomInputWidth", value)) windowsConfig.zoomInputWidth = value;
+        if (tabletMapping.getDouble("windowsZoomInputHeight", value)) windowsConfig.zoomInputHeight = value;
+        
+        // Zoom window output area (portion of screen to map to)
+        if (tabletMapping.getDouble("windowsZoomOutputX", value)) windowsConfig.zoomOutputX = value;
+        if (tabletMapping.getDouble("windowsZoomOutputY", value)) windowsConfig.zoomOutputY = value;
+        if (tabletMapping.getDouble("windowsZoomOutputWidth", value)) windowsConfig.zoomOutputWidth = value;
+        if (tabletMapping.getDouble("windowsZoomOutputHeight", value)) windowsConfig.zoomOutputHeight = value;
         
         TabletMapping::setWindowsConfig(windowsConfig);
         

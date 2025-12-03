@@ -13,16 +13,173 @@
 
 #include <cstdlib>
 #include <sstream>
-#include <array>
+
+#include <glib.h>
 
 #ifdef _WIN32
 #include <Windows.h>
+#include <shlobj.h>  // For SHGetFolderPathA
+
+// Wintab API definitions for tablet mapping
+// Load dynamically from WINTAB32.DLL
+#include <cstring>
+
+// Wintab data types
+typedef DWORD WTPKT;
+typedef HANDLE HCTX;
+typedef HANDLE HMGR;
+typedef UINT FIX32;
+
+// Context options
+#define CXO_SYSTEM      0x0001
+#define CXO_PEN         0x0002
+#define CXO_MESSAGES    0x0004
+
+// Lock options
+#define CXL_INSIZE      0x0001
+#define CXL_INASPECT    0x0002
+#define CXL_MARGIN      0x0004
+#define CXL_SENSITIVITY 0x0008
+#define CXL_SYSOUT      0x0010
+
+// WTI categories
+#define WTI_INTERFACE   1
+#define WTI_STATUS      2
+#define WTI_DEFCONTEXT  3
+#define WTI_DEFSYSCTX   4
+#define WTI_DEVICES     100
+#define WTI_CURSORS     200
+#define WTI_DDCTXS      400
+#define WTI_DSCTXS      500
+
+// WTI_DEVICES indices
+#define DVC_X           13
+#define DVC_Y           14
+
+// LOGCONTEXT structure (must match Wintab header exactly)
+#pragma pack(push, 1)
+typedef struct tagLOGCONTEXTA {
+    char    lcName[40];
+    UINT    lcOptions;
+    UINT    lcStatus;
+    UINT    lcLocks;
+    UINT    lcMsgBase;
+    UINT    lcDevice;
+    UINT    lcPktRate;
+    WTPKT   lcPktData;
+    WTPKT   lcPktMode;
+    WTPKT   lcMoveMask;
+    DWORD   lcBtnDnMask;
+    DWORD   lcBtnUpMask;
+    LONG    lcInOrgX;
+    LONG    lcInOrgY;
+    LONG    lcInOrgZ;
+    LONG    lcInExtX;
+    LONG    lcInExtY;
+    LONG    lcInExtZ;
+    LONG    lcOutOrgX;
+    LONG    lcOutOrgY;
+    LONG    lcOutOrgZ;
+    LONG    lcOutExtX;
+    LONG    lcOutExtY;
+    LONG    lcOutExtZ;
+    FIX32   lcSensX;
+    FIX32   lcSensY;
+    FIX32   lcSensZ;
+    BOOL    lcSysMode;
+    int     lcSysOrgX;
+    int     lcSysOrgY;
+    int     lcSysExtX;
+    int     lcSysExtY;
+    FIX32   lcSysSensX;
+    FIX32   lcSysSensY;
+} LOGCONTEXTA;
+
+// AXIS structure for device info
+typedef struct tagAXIS {
+    LONG    axMin;
+    LONG    axMax;
+    UINT    axUnits;
+    FIX32   axResolution;
+} AXIS;
+#pragma pack(pop)
+
+// Wintab function typedefs
+typedef UINT (WINAPI *WTINFOA)(UINT, UINT, LPVOID);
+typedef HCTX (WINAPI *WTOPENA)(HWND, LOGCONTEXTA*, BOOL);
+typedef BOOL (WINAPI *WTCLOSE)(HCTX);
+typedef BOOL (WINAPI *WTGETA)(HCTX, LOGCONTEXTA*);
+typedef BOOL (WINAPI *WTSETA)(HCTX, LOGCONTEXTA*);
+typedef BOOL (WINAPI *WTENABLE)(HCTX, BOOL);
+typedef BOOL (WINAPI *WTOVERLAP)(HCTX, BOOL);
+typedef HMGR (WINAPI *WTMGROPEN)(HWND, UINT);
+typedef BOOL (WINAPI *WTMGRCLOSE)(HMGR);
+typedef HCTX (WINAPI *WTMGRDEFCONTEXT)(HMGR, BOOL);
+typedef HCTX (WINAPI *WTMGRDEFCONTEXTEX)(HMGR, UINT, BOOL);
+
+// Wintab function pointers (loaded dynamically)
+static HMODULE g_hWintab = nullptr;
+static WTINFOA g_WTInfoA = nullptr;
+static WTOPENA g_WTOpenA = nullptr;
+static WTCLOSE g_WTClose = nullptr;
+static WTGETA g_WTGetA = nullptr;
+static WTSETA g_WTSetA = nullptr;
+static WTENABLE g_WTEnable = nullptr;
+static WTOVERLAP g_WTOverlap = nullptr;
+static WTMGROPEN g_WTMgrOpen = nullptr;
+static WTMGRCLOSE g_WTMgrClose = nullptr;
+static WTMGRDEFCONTEXT g_WTMgrDefContext = nullptr;
+static WTMGRDEFCONTEXTEX g_WTMgrDefContextEx = nullptr;
+
+// Our tablet context handle
+static HCTX g_hTabletContext = nullptr;
+
+// Tablet physical dimensions (in native tablet units)
+static LONG g_tabletMaxX = 21600;
+static LONG g_tabletMaxY = 13500;
+
+static bool loadWintab() {
+    if (g_hWintab) return true;
+    
+    g_hWintab = LoadLibraryA("WINTAB32.DLL");
+    if (!g_hWintab) {
+        g_warning("TabletMapping: Could not load WINTAB32.DLL");
+        return false;
+    }
+    
+    g_WTInfoA = (WTINFOA)GetProcAddress(g_hWintab, "WTInfoA");
+    g_WTOpenA = (WTOPENA)GetProcAddress(g_hWintab, "WTOpenA");
+    g_WTClose = (WTCLOSE)GetProcAddress(g_hWintab, "WTClose");
+    g_WTGetA = (WTGETA)GetProcAddress(g_hWintab, "WTGetA");
+    g_WTSetA = (WTSETA)GetProcAddress(g_hWintab, "WTSetA");
+    g_WTEnable = (WTENABLE)GetProcAddress(g_hWintab, "WTEnable");
+    g_WTOverlap = (WTOVERLAP)GetProcAddress(g_hWintab, "WTOverlap");
+    g_WTMgrOpen = (WTMGROPEN)GetProcAddress(g_hWintab, "WTMgrOpen");
+    g_WTMgrClose = (WTMGRCLOSE)GetProcAddress(g_hWintab, "WTMgrClose");
+    g_WTMgrDefContext = (WTMGRDEFCONTEXT)GetProcAddress(g_hWintab, "WTMgrDefContext");
+    g_WTMgrDefContextEx = (WTMGRDEFCONTEXTEX)GetProcAddress(g_hWintab, "WTMgrDefContextEx");
+    
+    if (!g_WTInfoA || !g_WTOpenA || !g_WTClose || !g_WTGetA || !g_WTSetA) {
+        g_warning("TabletMapping: Could not load Wintab functions");
+        FreeLibrary(g_hWintab);
+        g_hWintab = nullptr;
+        return false;
+    }
+    
+    // Get tablet physical dimensions
+    AXIS axisX, axisY;
+    if (g_WTInfoA(WTI_DEVICES, DVC_X, &axisX) && g_WTInfoA(WTI_DEVICES, DVC_Y, &axisY)) {
+        g_tabletMaxX = axisX.axMax;
+        g_tabletMaxY = axisY.axMax;
+        g_message("TabletMapping: Tablet dimensions: %ld x %ld", g_tabletMaxX, g_tabletMaxY);
+    }
+    
+    return true;
+}
 #else
 #include <unistd.h>
 #include <sys/wait.h>
 #endif
-
-#include <glib.h>
 
 // Static member initialization
 TabletMapping::LinuxKDEConfig TabletMapping::linuxConfig = {
@@ -35,10 +192,15 @@ TabletMapping::LinuxKDEConfig TabletMapping::linuxConfig = {
 };
 
 TabletMapping::WindowsConfig TabletMapping::windowsConfig = {
-    "",                     // Device ID - to be configured
-    0.0, 0.0, 1.0, 1.0,    // Full window area
-    0.0, 0.0, 1.0, 1.0     // Zoom window area
+    "",                                // Device ID - to be configured
+    0.0, 0.0, 1.0, 1.0,               // Full window input area (full tablet)
+    0.0, 0.0, 0.5, 1.0,               // Full window output area (left half of screen: 0-1720 x 0-1440)
+    0.0, 0.0, 1.0, 1.0,               // Zoom window input area (full tablet)
+    0.0, 0.5, 0.5, 0.5                // Zoom window output area (bottom-left quarter: 0-1720 x 720-1440)
 };
+
+// Current mapping state
+TabletMapping::MappingMode TabletMapping::currentMode = TabletMapping::MappingMode::FullWindow;
 
 void TabletMapping::setLinuxKDEConfig(const LinuxKDEConfig& config) {
     linuxConfig = config;
@@ -58,9 +220,8 @@ TabletMapping::WindowsConfig TabletMapping::getWindowsConfig() {
 
 bool TabletMapping::isAvailable() {
 #ifdef _WIN32
-    // Windows: Check if we can access tablet APIs
-    // TODO: Implement proper check for Wintab or Windows Ink availability
-    return false;  // Not yet implemented
+    // Windows: Always available - we use application-local coordinate transformation
+    return true;
 #else
     // Linux: Check if kwriteconfig6 is available (KDE Plasma 6)
     // Falls back to kwriteconfig5 for older KDE versions
@@ -73,7 +234,12 @@ bool TabletMapping::isAvailable() {
 #endif
 }
 
+TabletMapping::MappingMode TabletMapping::getCurrentMode() {
+    return currentMode;
+}
+
 bool TabletMapping::setMappingMode(MappingMode mode) {
+    currentMode = mode;
 #ifdef _WIN32
     return applyWindowsMapping(mode);
 #else
@@ -307,58 +473,153 @@ bool TabletMapping::applyLinuxKDEMapping(MappingMode /*mode*/) {
 #endif
 
 #ifdef _WIN32
+
 bool TabletMapping::applyWindowsMapping(MappingMode mode) {
     /*
-     * TODO: Implement Windows tablet mapping.
+     * Windows tablet mapping using Wintab API.
      * 
-     * Possible approaches:
-     * 
-     * 1. Wintab API:
-     *    - Use WTInfo() to query tablet capabilities
-     *    - Use WTSet() to modify tablet context
-     *    - May require modifying the application's tablet context
-     *    - See: https://developer-docs.wacom.com/docs/icbt/windows/wintab/wintab-basics/
-     * 
-     * 2. Windows Ink / Pointer Input:
-     *    - Use Windows.Devices.Input.Preview API
-     *    - May have limited mapping control
-     * 
-     * 3. Wacom Tablet Preferences API:
-     *    - Some Wacom drivers expose COM interfaces
-     *    - Can modify tablet area mappings programmatically
-     * 
-     * 4. Registry manipulation:
-     *    - Wacom stores settings in registry
-     *    - Modify and signal driver to reload
-     *    - Location varies by driver version
-     * 
-     * Example structure for Wintab implementation:
-     * 
-     * LOGCONTEXT lc;
-     * WTInfo(WTI_DEFCONTEXT, 0, &lc);
-     * 
-     * if (mode == MappingMode::ZoomWindow) {
-     *     // Map to zoom window area
-     *     lc.lcOutOrgX = (LONG)(windowsConfig.zoomLeft * lc.lcOutExtX);
-     *     lc.lcOutOrgY = (LONG)(windowsConfig.zoomTop * lc.lcOutExtY);
-     *     lc.lcOutExtX = (LONG)((windowsConfig.zoomRight - windowsConfig.zoomLeft) * lc.lcOutExtX);
-     *     lc.lcOutExtY = (LONG)((windowsConfig.zoomBottom - windowsConfig.zoomTop) * lc.lcOutExtY);
-     * } else {
-     *     // Map to full window area
-     *     // Use default or configured full window settings
-     * }
-     * 
-     * WTSet(hCtx, &lc);
+     * Creates a system context with CXO_SYSTEM flag that controls the Windows cursor position.
+     * By modifying lcSysOrgX/Y and lcSysExtX/Y, we can instantly change where the tablet
+     * maps to on the screen.
      */
     
-    // For now, just log that this is not yet implemented
-    OutputDebugStringA("TabletMapping: Windows tablet mapping not yet implemented\n");
+    if (!loadWintab()) {
+        g_warning("TabletMapping: Wintab not available, cannot change mapping");
+        return false;
+    }
     
-    // Return false to indicate the operation is not supported yet
-    return false;
+    // Get screen dimensions
+    int screenWidth = GetSystemMetrics(SM_CXSCREEN);
+    int screenHeight = GetSystemMetrics(SM_CYSCREEN);
+    g_message("TabletMapping: Screen size: %d x %d", screenWidth, screenHeight);
+    
+    // Determine mapping parameters based on mode
+    double inX, inY, inW, inH;   // Input area on tablet (normalized 0-1)
+    double outX, outY, outW, outH; // Output area on screen (normalized 0-1)
+    
+    if (mode == MappingMode::FullWindow) {
+        inX = windowsConfig.fullInputX;
+        inY = windowsConfig.fullInputY;
+        inW = windowsConfig.fullInputWidth;
+        inH = windowsConfig.fullInputHeight;
+        outX = windowsConfig.fullOutputX;
+        outY = windowsConfig.fullOutputY;
+        outW = windowsConfig.fullOutputWidth;
+        outH = windowsConfig.fullOutputHeight;
+    } else {
+        inX = windowsConfig.zoomInputX;
+        inY = windowsConfig.zoomInputY;
+        inW = windowsConfig.zoomInputWidth;
+        inH = windowsConfig.zoomInputHeight;
+        outX = windowsConfig.zoomOutputX;
+        outY = windowsConfig.zoomOutputY;
+        outW = windowsConfig.zoomOutputWidth;
+        outH = windowsConfig.zoomOutputHeight;
+    }
+    
+    g_message("TabletMapping: Mode=%s, Input=(%.2f,%.2f,%.2f,%.2f), Output=(%.2f,%.2f,%.2f,%.2f)",
+              mode == MappingMode::FullWindow ? "FullWindow" : "ZoomWindow",
+              inX, inY, inW, inH, outX, outY, outW, outH);
+    
+    // If we already have a context, modify it
+    if (g_hTabletContext) {
+        LOGCONTEXTA ctx;
+        memset(&ctx, 0, sizeof(ctx));
+        
+        if (g_WTGetA(g_hTabletContext, &ctx)) {
+            // Update input area (tablet coordinates)
+            ctx.lcInOrgX = (LONG)(inX * g_tabletMaxX);
+            ctx.lcInOrgY = (LONG)(inY * g_tabletMaxY);
+            ctx.lcInExtX = (LONG)(inW * g_tabletMaxX);
+            ctx.lcInExtY = (LONG)(inH * g_tabletMaxY);
+            
+            // Update system cursor output area (screen coordinates)
+            ctx.lcSysOrgX = (int)(outX * screenWidth);
+            ctx.lcSysOrgY = (int)(outY * screenHeight);
+            ctx.lcSysExtX = (int)(outW * screenWidth);
+            ctx.lcSysExtY = (int)(outH * screenHeight);
+            
+            g_message("TabletMapping: Modifying context - SysOrg=(%d,%d), SysExt=(%d,%d)",
+                      ctx.lcSysOrgX, ctx.lcSysOrgY, ctx.lcSysExtX, ctx.lcSysExtY);
+            
+            if (g_WTSetA(g_hTabletContext, &ctx)) {
+                currentMode = mode;
+                g_message("TabletMapping: Successfully updated mapping");
+                return true;
+            } else {
+                g_warning("TabletMapping: WTSetA failed");
+            }
+        } else {
+            g_warning("TabletMapping: WTGetA failed");
+        }
+    }
+    
+    // No existing context or update failed - create a new one
+    // Get the default system context as a template
+    LOGCONTEXTA defCtx;
+    memset(&defCtx, 0, sizeof(defCtx));
+    
+    if (!g_WTInfoA(WTI_DEFSYSCTX, 0, &defCtx)) {
+        g_warning("TabletMapping: Could not get default system context");
+        return false;
+    }
+    
+    g_message("TabletMapping: Default context - InOrg=(%ld,%ld), InExt=(%ld,%ld), SysOrg=(%d,%d), SysExt=(%d,%d)",
+              defCtx.lcInOrgX, defCtx.lcInOrgY, defCtx.lcInExtX, defCtx.lcInExtY,
+              defCtx.lcSysOrgX, defCtx.lcSysOrgY, defCtx.lcSysExtX, defCtx.lcSysExtY);
+    
+    // Store tablet dimensions from context if not set
+    if (defCtx.lcInExtX > 0) g_tabletMaxX = defCtx.lcInOrgX + defCtx.lcInExtX;
+    if (defCtx.lcInExtY > 0) g_tabletMaxY = defCtx.lcInOrgY + defCtx.lcInExtY;
+    
+    // Modify context for our mapping
+    strncpy(defCtx.lcName, "Xournal++ Tablet", 40);
+    defCtx.lcOptions |= CXO_SYSTEM;  // This is a system cursor context
+    
+    // Set input area (tablet coordinates)
+    defCtx.lcInOrgX = (LONG)(inX * g_tabletMaxX);
+    defCtx.lcInOrgY = (LONG)(inY * g_tabletMaxY);
+    defCtx.lcInExtX = (LONG)(inW * g_tabletMaxX);
+    defCtx.lcInExtY = (LONG)(inH * g_tabletMaxY);
+    
+    // Set system cursor output area (screen coordinates)
+    defCtx.lcSysOrgX = (int)(outX * screenWidth);
+    defCtx.lcSysOrgY = (int)(outY * screenHeight);
+    defCtx.lcSysExtX = (int)(outW * screenWidth);
+    defCtx.lcSysExtY = (int)(outH * screenHeight);
+    
+    // Close existing context if any
+    if (g_hTabletContext) {
+        g_WTClose(g_hTabletContext);
+        g_hTabletContext = nullptr;
+    }
+    
+    // We need a window handle - get the active window or desktop
+    HWND hWnd = GetActiveWindow();
+    if (!hWnd) hWnd = GetDesktopWindow();
+    
+    g_message("TabletMapping: Opening new context - SysOrg=(%d,%d), SysExt=(%d,%d)",
+              defCtx.lcSysOrgX, defCtx.lcSysOrgY, defCtx.lcSysExtX, defCtx.lcSysExtY);
+    
+    g_hTabletContext = g_WTOpenA(hWnd, &defCtx, TRUE);
+    if (!g_hTabletContext) {
+        g_warning("TabletMapping: Could not open tablet context");
+        return false;
+    }
+    
+    // Move our context to the top of the overlap order
+    if (g_WTOverlap) {
+        g_WTOverlap(g_hTabletContext, TRUE);
+    }
+    
+    currentMode = mode;
+    g_message("TabletMapping: Successfully created tablet context with new mapping");
+    
+    return true;
 }
 #else
 bool TabletMapping::applyWindowsMapping(MappingMode /*mode*/) {
     return false;  // Not applicable on Linux
 }
 #endif
+

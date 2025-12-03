@@ -57,23 +57,40 @@ public:
 
     /**
      * Configuration for tablet mapping on Windows.
-     * TODO: Fill in with actual Windows tablet API parameters.
+     * Uses Wintab API concepts for tablet-to-screen mapping.
+     * 
+     * NOTE: Unlike Linux KDE where we can modify system-wide mappings,
+     * Wintab contexts are per-application. This configuration affects
+     * how Xournal++ receives tablet data, but may not change the
+     * system cursor position mapping.
      */
     struct WindowsConfig {
-        // Device identifier (e.g., from Wintab API or Windows Ink)
+        // Device identifier (for future use - multiple tablet support)
         std::string deviceId;
         
-        // Full window mapping area (normalized 0-1)
-        double fullLeft = 0.0;
-        double fullTop = 0.0;
-        double fullRight = 1.0;
-        double fullBottom = 1.0;
+        // Input area for full window mapping (portion of tablet surface to use, normalized 0-1)
+        double fullInputX = 0.0;
+        double fullInputY = 0.0;
+        double fullInputWidth = 1.0;
+        double fullInputHeight = 1.0;
         
-        // Zoom window mapping area (normalized 0-1)
-        double zoomLeft = 0.0;
-        double zoomTop = 0.0;
-        double zoomRight = 1.0;
-        double zoomBottom = 1.0;
+        // Output area for full window mapping (portion of screen to map to, normalized 0-1)
+        double fullOutputX = 0.0;
+        double fullOutputY = 0.0;
+        double fullOutputWidth = 1.0;
+        double fullOutputHeight = 1.0;
+        
+        // Input area for zoom window mapping (portion of tablet surface to use, normalized 0-1)
+        double zoomInputX = 0.0;
+        double zoomInputY = 0.0;
+        double zoomInputWidth = 1.0;
+        double zoomInputHeight = 1.0;
+        
+        // Output area for zoom window mapping (portion of screen to map to, normalized 0-1)
+        double zoomOutputX = 0.0;
+        double zoomOutputY = 0.0;
+        double zoomOutputWidth = 1.0;
+        double zoomOutputHeight = 1.0;
     };
 
     /**
@@ -125,18 +142,23 @@ public:
      */
     static bool isAvailable();
 
+    /**
+     * Get the current mapping mode.
+     */
+    static MappingMode getCurrentMode();
+
 private:
     static LinuxKDEConfig linuxConfig;
     static WindowsConfig windowsConfig;
+    static MappingMode currentMode;
 
     /**
-     * Apply tablet mapping on Linux using kwriteconfig6.
+     * Apply tablet mapping on Linux using kwriteconfig6 and DBus.
      */
     static bool applyLinuxKDEMapping(MappingMode mode);
 
     /**
-     * Apply tablet mapping on Windows.
-     * TODO: Implement using Windows tablet API.
+     * Apply tablet mapping on Windows using Wintab API.
      */
     static bool applyWindowsMapping(MappingMode mode);
 };
