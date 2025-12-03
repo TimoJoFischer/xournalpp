@@ -1164,12 +1164,15 @@ gboolean MainWindow::onZoomWindowKeyPress(GtkWidget* widget, GdkEventKey* event,
                 // Currently full window mode, switch to indicator/zoom mode
                 if (directMode) {
                     // In direct mode, map to indicator position
-                    self->updateDynamicIndicatorMapping();
+                    // Use scheduled update to give time for the indicator to be positioned first
+                    // by the periodic timer callback
+                    self->zoomWindowFocusMode = true;  // Set this first so the timer shows the indicator
+                    self->scheduleIndicatorMappingUpdate();
                     TabletMapping::setMappingMode(TabletMapping::MappingMode::IndicatorMapping);
                 } else {
                     TabletMapping::setMappingMode(TabletMapping::MappingMode::ZoomWindow);
+                    self->zoomWindowFocusMode = true;
                 }
-                self->zoomWindowFocusMode = true;
                 if (!directMode && self->zoomWindowBtnFocusZoom) {
                     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(self->zoomWindowBtnFocusZoom), TRUE);
                 }
