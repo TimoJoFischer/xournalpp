@@ -1306,11 +1306,9 @@ void MainWindow::loadTabletMappingConfig() {
                  "  linuxZoomInputX/Y/Width/Height, linuxZoomOutputX/Y/Width/Height");
     }
     
-    // Windows configuration (placeholder)
-    std::string deviceId;
-    if (tabletMapping.getString("windowsDeviceId", deviceId)) {
+    // Windows configuration
+    {
         TabletMapping::WindowsConfig windowsConfig;
-        windowsConfig.deviceId = deviceId;
         
         double value;
         // Full window input area (portion of tablet to use)
@@ -1339,7 +1337,11 @@ void MainWindow::loadTabletMappingConfig() {
         
         TabletMapping::setWindowsConfig(windowsConfig);
         
-        g_message("TabletMapping: Loaded Windows config - deviceId=%s", deviceId.c_str());
+        g_message("TabletMapping: Loaded Windows config - FullOutput=(%.2f,%.2f,%.2f,%.2f), ZoomOutput=(%.2f,%.2f,%.2f,%.2f)",
+                  windowsConfig.fullOutputX, windowsConfig.fullOutputY, 
+                  windowsConfig.fullOutputWidth, windowsConfig.fullOutputHeight,
+                  windowsConfig.zoomOutputX, windowsConfig.zoomOutputY,
+                  windowsConfig.zoomOutputWidth, windowsConfig.zoomOutputHeight);
     }
     
     // Check if tablet mapping is available on this system
@@ -1361,8 +1363,8 @@ double MainWindow::getZoomWindowFactor() const {
 void MainWindow::getZoomWindowSize(int& width, int& height) const {
     Settings* settings = control->getSettings();
     SElement& zoomWindow = settings->getCustomElement("zoomWindow");
-    width = 533;   // Default value
-    height = 300;  // Default value
+    width = 560;   // Default value
+    height = 350;  // Default value
     zoomWindow.getInt("width", width);
     zoomWindow.getInt("height", height);
 }
