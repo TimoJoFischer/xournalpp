@@ -364,30 +364,4 @@ cmake --build . --target install
 ./xournalpp
 
 
-Add tablet settings into .config/xournalpp/settings.xml
 
-
-<tabletMapping>
-  <linuxKDEGroup value="[Libinput][1386][888][Wacom Intuos BT M Pen]" />
-  <linuxKDEOutputUuid value="64357a01-6dbe-4386-a091-2f660a05ec5d" />
-  
-  <!-- Full window mode: use entire tablet, map to left half of screen -->
-  <linuxFullInputX value="0" />
-  <linuxFullInputY value="0" />
-  <linuxFullInputWidth value="1" />
-  <linuxFullInputHeight value="1" />
-  <linuxFullOutputX value="0" />
-  <linuxFullOutputY value="0" />
-  <linuxFullOutputWidth value="0.5003431165540541" />
-  <linuxFullOutputHeight value="1" />
-  
-  <!-- Zoom window mode: use portion of tablet, map to zoom window area -->
-  <linuxZoomInputX value="0" />
-  <linuxZoomInputY value="0" />
-  <linuxZoomInputWidth value="0.7730263157894738" />
-  <linuxZoomInputHeight value="1" />
-  <linuxZoomOutputX value="0.4" />
-  <linuxZoomOutputY value="0.8" />
-  <linuxZoomOutputWidth value="0.5003431165540541" />
-  <linuxZoomOutputHeight value="1" />
-</tabletMapping>
