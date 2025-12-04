@@ -1185,6 +1185,10 @@ void Control::toolChanged() {
     this->actionDB->enableAction(Action::TOOL_DRAW_COORDINATE_SYSTEM, toolHandler->hasCapability(TOOL_CAP_ARROW));
     this->actionDB->enableAction(Action::TOOL_DRAW_SPLINE, toolHandler->hasCapability(TOOL_CAP_SPLINE));
     this->actionDB->enableAction(Action::TOOL_DRAW_SHAPE_RECOGNIZER, toolHandler->hasCapability(TOOL_CAP_RECOGNIZER));
+    this->actionDB->enableAction(Action::TOOL_DRAW_GAUSSIAN, toolHandler->hasCapability(TOOL_CAP_GAUSSIAN));
+    this->actionDB->enableAction(Action::TOOL_DRAW_SINUS, toolHandler->hasCapability(TOOL_CAP_SINUS));
+    this->actionDB->enableAction(Action::TOOL_DRAW_POLYNOMIAL, toolHandler->hasCapability(TOOL_CAP_POLYNOMIAL));
+    this->actionDB->enableAction(Action::TOOL_DRAW_EXP, toolHandler->hasCapability(TOOL_CAP_EXP));
 
     DrawingType dt = toolHandler->getDrawingType();
     this->actionDB->setActionState(Action::TOOL_DRAW_LINE, dt == DRAWING_TYPE_LINE);
@@ -1195,6 +1199,10 @@ void Control::toolChanged() {
     this->actionDB->setActionState(Action::TOOL_DRAW_COORDINATE_SYSTEM, dt == DRAWING_TYPE_COORDINATE_SYSTEM);
     this->actionDB->setActionState(Action::TOOL_DRAW_SPLINE, dt == DRAWING_TYPE_SPLINE);
     this->actionDB->setActionState(Action::TOOL_DRAW_SHAPE_RECOGNIZER, dt == DRAWING_TYPE_SHAPE_RECOGNIZER);
+    this->actionDB->setActionState(Action::TOOL_DRAW_GAUSSIAN, dt == DRAWING_TYPE_GAUSSIAN);
+    this->actionDB->setActionState(Action::TOOL_DRAW_SINUS, dt == DRAWING_TYPE_SINUS);
+    this->actionDB->setActionState(Action::TOOL_DRAW_POLYNOMIAL, dt == DRAWING_TYPE_POLYNOMIAL);
+    this->actionDB->setActionState(Action::TOOL_DRAW_EXP, dt == DRAWING_TYPE_EXP);
 
     bool enableSize = toolHandler->hasCapability(TOOL_CAP_SIZE);
     this->actionDB->enableAction(Action::TOOL_SIZE, enableSize);

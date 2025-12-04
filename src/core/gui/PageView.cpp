@@ -32,14 +32,18 @@
 #include "control/tools/EditSelection.h"            // for EditSelection
 #include "control/tools/EllipseHandler.h"           // for EllipseHandler
 #include "control/tools/EraseHandler.h"             // for EraseHandler
+#include "control/tools/ExpHandler.h"               // for ExpHandler
+#include "control/tools/GaussianHandler.h"          // for GaussianHandler
 #include "control/tools/ImageHandler.h"             // for ImageHandler
 #include "control/tools/ImageSizeSelection.h"       // for ImageSizeSelection
 #include "control/tools/InputHandler.h"             // for InputHandler
 #include "control/tools/LaserPointerHandler.h"      // for LaserPointerHandler
 #include "control/tools/PdfElemSelection.h"         // for PdfElemSelection
+#include "control/tools/PolynomialHandler.h"        // for PolynomialHandler
 #include "control/tools/RectangleHandler.h"         // for RectangleHandler
 #include "control/tools/RulerHandler.h"             // for RulerHandler
 #include "control/tools/Selector.h"                 // for RectangularSelector
+#include "control/tools/SinusHandler.h"             // for SinusHandler
 #include "control/tools/SplineHandler.h"            // for SplineHandler
 #include "control/tools/StrokeHandler.h"            // for StrokeHandler
 #include "control/tools/TextEditor.h"               // for TextEditor, TextE...
@@ -281,6 +285,18 @@ auto XojPageView::onButtonPressEvent(const PositionInputData& pos) -> bool {
                 break;
             case DRAWING_TYPE_COORDINATE_SYSTEM:
                 this->inputHandler = std::make_unique<CoordinateSystemHandler>(control, getPage());
+                break;
+            case DRAWING_TYPE_GAUSSIAN:
+                this->inputHandler = std::make_unique<GaussianHandler>(control, getPage());
+                break;
+            case DRAWING_TYPE_SINUS:
+                this->inputHandler = std::make_unique<SinusHandler>(control, getPage());
+                break;
+            case DRAWING_TYPE_POLYNOMIAL:
+                this->inputHandler = std::make_unique<PolynomialHandler>(control, getPage());
+                break;
+            case DRAWING_TYPE_EXP:
+                this->inputHandler = std::make_unique<ExpHandler>(control, getPage());
                 break;
             default:
                 this->inputHandler = std::make_unique<StrokeHandler>(control, getPage());

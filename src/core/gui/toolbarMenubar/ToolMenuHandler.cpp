@@ -427,6 +427,11 @@ void ToolMenuHandler::initToolItems() {
                          "draw-coordinate-system", _("Draw Coordinate System"));
     emplaceCustomItemTgl("RULER", Cat::TOOLS, Action::TOOL_DRAW_LINE, "draw-line", _("Draw Line"));
     emplaceCustomItemTgl("DRAW_SPLINE", Cat::TOOLS, Action::TOOL_DRAW_SPLINE, "draw-spline", _("Draw Spline"));
+    emplaceCustomItemTgl("DRAW_GAUSSIAN", Cat::TOOLS, Action::TOOL_DRAW_GAUSSIAN, "draw-gaussian", _("Draw Gaussian"));
+    emplaceCustomItemTgl("DRAW_SINUS", Cat::TOOLS, Action::TOOL_DRAW_SINUS, "draw-sinus", _("Draw Sinus"));
+    emplaceCustomItemTgl("DRAW_POLYNOMIAL", Cat::TOOLS, Action::TOOL_DRAW_POLYNOMIAL, "draw-polynomial",
+                         _("Draw Polynomial"));
+    emplaceCustomItemTgl("DRAW_EXP", Cat::TOOLS, Action::TOOL_DRAW_EXP, "draw-exp", _("Draw Exponential"));
 
     emplaceCustomItemWithTarget("SELECT_REGION", Cat::SELECTION, Action::SELECT_TOOL, TOOL_SELECT_REGION,
                                 "select-lasso", _("Select Region"));

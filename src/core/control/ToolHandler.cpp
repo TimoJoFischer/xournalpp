@@ -57,7 +57,7 @@ void ToolHandler::initTools() {
             "pen", TOOL_PEN, Colors::xopp_royalblue,
             TOOL_CAP_COLOR | TOOL_CAP_SIZE | TOOL_CAP_RULER | TOOL_CAP_RECTANGLE | TOOL_CAP_ELLIPSE | TOOL_CAP_ARROW |
                     TOOL_CAP_DOUBLE_ARROW | TOOL_CAP_SPLINE | TOOL_CAP_RECOGNIZER | TOOL_CAP_FILL | TOOL_CAP_DASH_LINE |
-                    TOOL_CAP_LINE_STYLE,
+                    TOOL_CAP_LINE_STYLE | TOOL_CAP_GAUSSIAN | TOOL_CAP_SINUS | TOOL_CAP_POLYNOMIAL | TOOL_CAP_EXP,
             thickness);
 
     thickness[TOOL_SIZE_VERY_FINE] = 1;
@@ -77,7 +77,8 @@ void ToolHandler::initTools() {
     tools[TOOL_HIGHLIGHTER - TOOL_PEN] = std::make_unique<Tool>(
             "highlighter", TOOL_HIGHLIGHTER, Colors::yellow,
             TOOL_CAP_COLOR | TOOL_CAP_SIZE | TOOL_CAP_RULER | TOOL_CAP_RECTANGLE | TOOL_CAP_ELLIPSE | TOOL_CAP_ARROW |
-                    TOOL_CAP_DOUBLE_ARROW | TOOL_CAP_SPLINE | TOOL_CAP_RECOGNIZER | TOOL_CAP_FILL,
+                    TOOL_CAP_DOUBLE_ARROW | TOOL_CAP_SPLINE | TOOL_CAP_RECOGNIZER | TOOL_CAP_FILL | TOOL_CAP_GAUSSIAN |
+                    TOOL_CAP_SINUS | TOOL_CAP_POLYNOMIAL | TOOL_CAP_EXP,
             thickness);
 
     tools[TOOL_TEXT - TOOL_PEN] =
@@ -127,6 +128,18 @@ void ToolHandler::initTools() {
 
     tools[TOOL_DRAW_SPLINE - TOOL_PEN] =
             std::make_unique<Tool>("drawSpline", TOOL_DRAW_SPLINE, Colors::black, TOOL_CAP_NONE, std::nullopt);
+
+    tools[TOOL_DRAW_GAUSSIAN - TOOL_PEN] =
+            std::make_unique<Tool>("drawGaussian", TOOL_DRAW_GAUSSIAN, Colors::black, TOOL_CAP_NONE, std::nullopt);
+
+    tools[TOOL_DRAW_SINUS - TOOL_PEN] =
+            std::make_unique<Tool>("drawSinus", TOOL_DRAW_SINUS, Colors::black, TOOL_CAP_NONE, std::nullopt);
+
+    tools[TOOL_DRAW_POLYNOMIAL - TOOL_PEN] =
+            std::make_unique<Tool>("drawPolynomial", TOOL_DRAW_POLYNOMIAL, Colors::black, TOOL_CAP_NONE, std::nullopt);
+
+    tools[TOOL_DRAW_EXP - TOOL_PEN] =
+            std::make_unique<Tool>("drawExp", TOOL_DRAW_EXP, Colors::black, TOOL_CAP_NONE, std::nullopt);
 
     tools[TOOL_FLOATING_TOOLBOX - TOOL_PEN] = std::make_unique<Tool>("showFloatingToolbox", TOOL_FLOATING_TOOLBOX,
                                                                      Colors::black, TOOL_CAP_NONE, std::nullopt);

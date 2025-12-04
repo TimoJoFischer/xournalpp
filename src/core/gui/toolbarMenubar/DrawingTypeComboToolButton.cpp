@@ -42,6 +42,11 @@ static auto makeEntries(IconNameHelper& icons, const ActionDatabase& db)
     entries[Type::SPLINE] = Entry(_("Draw Spline"), icons.iconName("draw-spline"), db, Action::TOOL_DRAW_SPLINE);
     entries[Type::SHAPE_RECOGNIZER] =
             Entry(_("Stroke recognizer"), icons.iconName("shape-recognizer"), db, Action::TOOL_DRAW_SHAPE_RECOGNIZER);
+    entries[Type::GAUSSIAN] = Entry(_("Draw Gaussian"), icons.iconName("draw-gaussian"), db, Action::TOOL_DRAW_GAUSSIAN);
+    entries[Type::SINUS] = Entry(_("Draw Sinus"), icons.iconName("draw-sinus"), db, Action::TOOL_DRAW_SINUS);
+    entries[Type::POLYNOMIAL] =
+            Entry(_("Draw Polynomial"), icons.iconName("draw-polynomial"), db, Action::TOOL_DRAW_POLYNOMIAL);
+    entries[Type::EXP] = Entry(_("Draw Exponential"), icons.iconName("draw-exp"), db, Action::TOOL_DRAW_EXP);
     return res;
 }
 
@@ -144,6 +149,14 @@ auto DrawingTypeComboToolButton::createItem(bool horizontal) -> xoj::util::Widge
     g_signal_connect((*entries)[Type::SHAPE_RECOGNIZER].gAction.get(), "notify::state",
                      xoj::util::wrap_for_g_callback_v<Data::setProminentIconCallback<Type::SHAPE_RECOGNIZER>>,
                      data.get());
+    g_signal_connect((*entries)[Type::GAUSSIAN].gAction.get(), "notify::state",
+                     xoj::util::wrap_for_g_callback_v<Data::setProminentIconCallback<Type::GAUSSIAN>>, data.get());
+    g_signal_connect((*entries)[Type::SINUS].gAction.get(), "notify::state",
+                     xoj::util::wrap_for_g_callback_v<Data::setProminentIconCallback<Type::SINUS>>, data.get());
+    g_signal_connect((*entries)[Type::POLYNOMIAL].gAction.get(), "notify::state",
+                     xoj::util::wrap_for_g_callback_v<Data::setProminentIconCallback<Type::POLYNOMIAL>>, data.get());
+    g_signal_connect((*entries)[Type::EXP].gAction.get(), "notify::state",
+                     xoj::util::wrap_for_g_callback_v<Data::setProminentIconCallback<Type::EXP>>, data.get());
 
     // Disconnect the signal and destroy *data if the widget is destroyed
     g_object_weak_ref(
@@ -158,6 +171,10 @@ auto DrawingTypeComboToolButton::createItem(bool horizontal) -> xoj::util::Widge
                 g_signal_handlers_disconnect_by_data((*data->entries)[Type::COORDINATE_SYSTEM].gAction.get(), d);
                 g_signal_handlers_disconnect_by_data((*data->entries)[Type::SPLINE].gAction.get(), d);
                 g_signal_handlers_disconnect_by_data((*data->entries)[Type::SHAPE_RECOGNIZER].gAction.get(), d);
+                g_signal_handlers_disconnect_by_data((*data->entries)[Type::GAUSSIAN].gAction.get(), d);
+                g_signal_handlers_disconnect_by_data((*data->entries)[Type::SINUS].gAction.get(), d);
+                g_signal_handlers_disconnect_by_data((*data->entries)[Type::POLYNOMIAL].gAction.get(), d);
+                g_signal_handlers_disconnect_by_data((*data->entries)[Type::EXP].gAction.get(), d);
                 delete data;
             },
             data.release());

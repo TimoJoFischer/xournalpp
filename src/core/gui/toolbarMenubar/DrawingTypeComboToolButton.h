@@ -53,6 +53,10 @@ public:
         COORDINATE_SYSTEM,
         SPLINE,
         SHAPE_RECOGNIZER,
+        GAUSSIAN,
+        SINUS,
+        POLYNOMIAL,
+        EXP,
         ENUMERATOR_COUNT
     };
 

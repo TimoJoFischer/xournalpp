@@ -418,7 +418,7 @@ msgstr "Exporta les capes progresivament\n"
 "                                 A l'exportar a PDF, es renderitzen les capes progressivament una a una.\n"
 "                                 Així, s'exporten N pàgines per pàgina amb N capes,\n"
 "                                 augmentant progressivament la pila de capes.\n"
-"                                 El fitxer PDF resultant es pot fer servir per a presentacions."
+"                                 El fitxer PDF resultant es pot fer servir per a presentacions.\n"
 
 #: ../src/core/control/XournalMain.cpp:632
 msgid "Only export the pages specified by RANGE (e.g. \"2-3,5,7-\")\n"

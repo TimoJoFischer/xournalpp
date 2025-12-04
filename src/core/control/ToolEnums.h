@@ -52,11 +52,16 @@ enum DrawingType {
     DRAWING_TYPE_DOUBLE_ARROW,
     DRAWING_TYPE_COORDINATE_SYSTEM,
     DRAWING_TYPE_SHAPE_RECOGNIZER,
-    DRAWING_TYPE_SPLINE
+    DRAWING_TYPE_SPLINE,
+    DRAWING_TYPE_GAUSSIAN,
+    DRAWING_TYPE_SINUS,
+    DRAWING_TYPE_POLYNOMIAL,
+    DRAWING_TYPE_EXP
 };
-static constexpr std::array<std::string_view, 10> drawingTypeNames{
-        "dontChange",           "default",          "line",  "rectangle", "ellipse", "arrow", "doubleArrow",
-        "drawCoordinateSystem", "strokeRecognizer", "spline"};
+static constexpr std::array<std::string_view, 14> drawingTypeNames{
+        "dontChange",           "default",          "line",       "rectangle",   "ellipse",
+        "arrow",                "doubleArrow",      "drawCoordinateSystem", "strokeRecognizer", "spline",
+        "gaussian",             "sinus",            "polynomial", "exp"};
 
 static constexpr std::string_view drawingTypeToString(DrawingType type) {
     return drawingTypeNames.at(static_cast<size_t>(type));
@@ -92,10 +97,14 @@ enum ToolType {
     TOOL_SELECT_PDF_TEXT_RECT = 22,
     TOOL_LASER_POINTER_PEN = 23,
     TOOL_LASER_POINTER_HIGHLIGHTER = 24,
+    TOOL_DRAW_GAUSSIAN = 25,
+    TOOL_DRAW_SINUS = 26,
+    TOOL_DRAW_POLYNOMIAL = 27,
+    TOOL_DRAW_EXP = 28,
 
     TOOL_END_ENTRY
 };
-static constexpr std::array<std::string_view, 25> toolNames{"none",
+static constexpr std::array<std::string_view, 29> toolNames{"none",
                                                             "pen",
                                                             "eraser",
                                                             "highlighter",
@@ -119,7 +128,11 @@ static constexpr std::array<std::string_view, 25> toolNames{"none",
                                                             "selectPdfTextLinear",
                                                             "selectPdfTextRect",
                                                             "laserPointerPen",
-                                                            "laserPointerHighlighter"};
+                                                            "laserPointerHighlighter",
+                                                            "drawGaussian",
+                                                            "drawSinus",
+                                                            "drawPolynomial",
+                                                            "drawExp"};
 
 auto isSelectToolType(ToolType type) -> bool;
 auto isSelectToolTypeSingleLayer(ToolType type) -> bool;
@@ -173,7 +186,11 @@ enum ToolCapabilities : unsigned int {
     TOOL_CAP_COORDINATE_SYSTEM = 1 << 9,
     TOOL_CAP_DASH_LINE = 1 << 10,
     TOOL_CAP_SPLINE = 1 << 11,
-    TOOL_CAP_LINE_STYLE = 1 << 12
+    TOOL_CAP_LINE_STYLE = 1 << 12,
+    TOOL_CAP_GAUSSIAN = 1 << 13,
+    TOOL_CAP_SINUS = 1 << 14,
+    TOOL_CAP_POLYNOMIAL = 1 << 15,
+    TOOL_CAP_EXP = 1 << 16
 };
 
 enum StrokeType {

@@ -597,6 +597,22 @@
       <attribute name="action">win.tool-draw-spline</attribute>
       <attribute name="accel">&lt;Ctrl&gt;8</attribute>
      </item>
+     <item>
+      <attribute name="label" translatable="yes">Draw Gaussian</attribute>
+      <attribute name="action">win.tool-draw-gaussian</attribute>
+     </item>
+     <item>
+      <attribute name="label" translatable="yes">Draw Sinus</attribute>
+      <attribute name="action">win.tool-draw-sinus</attribute>
+     </item>
+     <item>
+      <attribute name="label" translatable="yes">Draw Polynomial</attribute>
+      <attribute name="action">win.tool-draw-polynomial</attribute>
+     </item>
+     <item>
+      <attribute name="label" translatable="yes">Draw Exponential</attribute>
+      <attribute name="action">win.tool-draw-exp</attribute>
+     </item>
     </submenu>
    </section>
    <section>
