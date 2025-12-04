@@ -57,7 +57,7 @@
       "msystem": "clangarm64",
       "msys_package_env": "clang-aarch64",
       "build_portable": "true",
-      "run_ci": "true"
+      "run_ci": "false"
     }
   }
 }
