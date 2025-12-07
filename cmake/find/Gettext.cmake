@@ -469,7 +469,7 @@ if(XGETTEXT_FOUND)
       add_custom_target(pot
         COMMAND_EXPAND_LISTS
         COMMAND
-          "${GETTEXT_MSGCAT_EXECUTABLE}" "-o" "${potfile}" "--use-first" "${generatedPotFiles}"
+          "${GETTEXT_MSGCAT_EXECUTABLE}" "-o" "${potfile}" "--use-first" "--unique" "${generatedPotFiles}"
         DEPENDS
           "${generatedPotFiles}"
         WORKING_DIRECTORY

@@ -1,0 +1,82 @@
+name: Manual Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_windows:
+        description: 'Build Windows portable'
+        type: boolean
+        default: true
+      build_linux:
+        description: 'Build Linux AppImage'
+        type: boolean
+        default: false
+      build_macos:
+        description: 'Build MacOS'
+        type: boolean
+        default: false
+
+env:
+  build-targets-json: '.github/available-build-targets.json'
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    name: 'Prepare jobs'
+    outputs:
+      linux_builds: ${{ steps.parse.outputs.linux_builds }}
+      macos_builds: ${{ steps.parse.outputs.macos_builds }}
+      windows_builds: ${{ steps.parse.outputs.windows_builds }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: '${{ env.build-targets-json }}'
+          sparse-checkout-cone-mode: false
+      - name: 'Parse list of targets'
+        id: parse
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const available_targets = require('${{ env.build-targets-json }}')
+
+            const linux_builds = []
+            if ('${{ inputs.build_linux }}' === 'true') {
+              for (const tgt in available_targets.linux_targets) {
+                if (available_targets.linux_targets[tgt].run_ci === 'true') {
+                  linux_builds.push(available_targets.linux_targets[tgt])
+                }
+              }
+            }
+            core.setOutput('linux_builds', linux_builds)
+
+            const macos_builds = []
+            if ('${{ inputs.build_macos }}' === 'true') {
+              for (const tgt in available_targets.macos_targets) {
+                if (available_targets.macos_targets[tgt].run_ci === 'true') {
+                  macos_builds.push(available_targets.macos_targets[tgt])
+                }
+              }
+            }
+            core.setOutput('macos_builds', macos_builds)
+
+            const windows_builds = []
+            if ('${{ inputs.build_windows }}' === 'true') {
+              for (const tgt in available_targets.windows_targets) {
+                if (available_targets.windows_targets[tgt].run_ci === 'true') {
+                  windows_builds.push(available_targets.windows_targets[tgt])
+                }
+              }
+            }
+            core.setOutput('windows_builds', windows_builds)
+
+  build:
+    name: Build installers
+    needs: prepare
+    permissions:
+      contents: read
+    uses: ./.github/workflows/create-installers.yml
+    with:
+      linux_builds: ${{ needs.prepare.outputs.linux_builds }}
+      macos_builds: ${{ needs.prepare.outputs.macos_builds }}
+      windows_builds: ${{ needs.prepare.outputs.windows_builds }}
+      build_type: 'RelWithDebInfo'

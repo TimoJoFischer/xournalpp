@@ -67,6 +67,23 @@ struct _GtkXournal {
      * Input handling
      */
     InputContext* input = nullptr;
+    
+    /**
+     * Zoom window indicator rectangle (in view coordinates)
+     * Shows which area is displayed in the zoom window
+     */
+    bool showZoomIndicator = false;
+    double zoomIndicatorX = 0;
+    double zoomIndicatorY = 0;
+    double zoomIndicatorWidth = 0;
+    double zoomIndicatorHeight = 0;
+    
+    /**
+     * Indicator dragging state
+     */
+    bool indicatorDragging = false;
+    double indicatorDragOffsetX = 0;  // Offset from indicator top-left to click position
+    double indicatorDragOffsetY = 0;
 };
 
 struct _GtkXournalClass {
@@ -84,5 +101,37 @@ void gtk_xournal_scroll_relative(GtkWidget* widget, double x, double y);
 void gtk_xournal_repaint_area(GtkWidget* widget, int x1, int y1, int x2, int y2);
 
 xoj::util::Rectangle<double>* gtk_xournal_get_visible_area(GtkWidget* widget, const XojPageView* p);
+
+void gtk_xournal_set_zoom_indicator(GtkWidget* widget, bool show, double x, double y, double width, double height);
+
+/**
+ * Check if a point is inside the zoom indicator rectangle
+ */
+bool gtk_xournal_point_in_indicator(GtkWidget* widget, double x, double y);
+
+/**
+ * Check if a point is inside the zoom indicator's drag handle (bottom-right corner)
+ */
+bool gtk_xournal_point_in_indicator_corner(GtkWidget* widget, double x, double y);
+
+/**
+ * Start dragging the indicator from a given point
+ */
+void gtk_xournal_start_indicator_drag(GtkWidget* widget, double x, double y);
+
+/**
+ * Update indicator position during drag
+ */
+void gtk_xournal_update_indicator_drag(GtkWidget* widget, double x, double y);
+
+/**
+ * Stop dragging the indicator
+ */
+void gtk_xournal_stop_indicator_drag(GtkWidget* widget);
+
+/**
+ * Check if indicator is currently being dragged
+ */
+bool gtk_xournal_is_indicator_dragging(GtkWidget* widget);
 
 G_END_DECLS

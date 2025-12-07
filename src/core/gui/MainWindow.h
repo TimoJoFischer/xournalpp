@@ -29,6 +29,7 @@
 #include "ToolbarDefinitions.h"  // for TOOLBAR_DEFINITIONS_LEN
 
 class Control;
+class PositionInputData;
 class Layout;
 class SpinPageAdapter;
 class ScrollHandling;
@@ -113,6 +114,11 @@ public:
     [[maybe_unused]] Menubar* getMenubar() const;
 
     /**
+     * Get the zoom window drawing area widget (may be nullptr if not initialized)
+     */
+    GtkWidget* getZoomWindowDrawingArea() const;
+
+    /**
      * Get the position of the top left corner of screen (X11) or the window (Wayland)
      * relative to the Xournal Widget top left corner
      *
@@ -129,6 +135,23 @@ public:
 
     /// Infer the window's DPI from available monitor info and use it to set the default zoom value.
     void setDPI() const;
+
+    /**
+     * Load tablet mapping configuration from settings
+     */
+    void loadTabletMappingConfig();
+    
+    /**
+     * Update dynamic indicator area for tablet mapping in direct mode.
+     * Converts indicator widget position to screen coordinates and updates TabletMapping.
+     */
+    void updateDynamicIndicatorMapping();
+    
+    /**
+     * Schedule a delayed update of indicator mapping.
+     * Used to avoid excessive updates during dragging - only applies mapping after movement stops.
+     */
+    void scheduleIndicatorMappingUpdate();
 
 private:
     void initXournalWidget();
@@ -193,4 +216,123 @@ private:
     xoj::util::WidgetSPtr panedContainerWidget;
     xoj::util::WidgetSPtr mainContentWidget;
     xoj::util::WidgetSPtr sidebarWidget;
+
+    // Zoom window for displaying a scaled view of the canvas
+    GtkWidget* zoomWindowDrawingArea = nullptr;
+    GtkWidget* zoomWindowFrame = nullptr;
+    GtkWidget* zoomWindowBtnMinimize = nullptr;
+    GtkWidget* zoomWindowBtnMaximize = nullptr;
+    GtkWidget* zoomWindowBtnFocusZoom = nullptr;
+    GtkWidget* zoomWindowBtnFocusAll = nullptr;
+    GtkWidget* zoomWindowBtnDrag = nullptr;
+    bool zoomWindowFocusMode = true;  // true = zoom window only, false = full window
+    
+    // Drag button state for moving the indicator
+    bool zoomWindowDragging = false;
+    double zoomWindowDragStartX = 0.0;  // Click position (reference center)
+    double zoomWindowDragStartY = 0.0;
+    double zoomWindowDragCurrentX = 0.0;  // Current mouse position
+    double zoomWindowDragCurrentY = 0.0;
+    guint zoomWindowDragTimerId = 0;  // Timer for continuous movement
+    
+    // Zoom window transformation parameters (for input handling)
+    double zoomWindowScale = 5.0;       // Magnification factor
+    double zoomWindowIndicatorX = 0.0;   // Top-left X of visible area in page display coords
+    double zoomWindowIndicatorY = 0.0;   // Top-left Y of visible area in page display coords
+    bool zoomWindowInputActive = false;
+    
+    // Stylus button state for zoom window (for tool changes like eraser)
+    bool zoomWindowStylusBtn2 = false;   // Stylus button 1 (modifier2)
+    bool zoomWindowStylusBtn3 = false;   // Stylus button 2 (modifier3)
+    bool zoomWindowIsEraser = false;     // True if using eraser tip
+    
+    // Stored indicator position (can be moved with keyboard)
+    double zoomIndicatorPosX = 0.0;      // User-controlled X position
+    double zoomIndicatorPosY = 0.0;      // User-controlled Y position
+    size_t zoomWindowLastPage = static_cast<size_t>(-1);  // Track last rendered page to detect external page changes
+    bool zoomWindowInternalPageChange = false;  // Flag to prevent resetting during keyboard page navigation
+    
+    // Indicator direct dragging (on main view)
+    bool indicatorDirectDragging = false;
+    
+    // Last mapped indicator position (to avoid redundant mapping updates)
+    double lastMappedIndicatorX = -1.0;
+    double lastMappedIndicatorY = -1.0;
+    
+    // Timer for delayed mapping update (only update after movement stops)
+    guint mappingUpdateTimerId = 0;
+
+    /**
+     * Initialize the zoom window drawing area
+     */
+    void initZoomWindow();
+    
+    /**
+     * Get the zoom window magnification factor from settings
+     */
+    double getZoomWindowFactor() const;
+    
+    /**
+     * Get the zoom window dimensions from settings
+     */
+    void getZoomWindowSize(int& width, int& height) const;
+    
+    /**
+     * Check if direct mapping mode is enabled (second setup - no zoom window)
+     * In direct mode, the tablet maps directly to the indicator area on the main canvas
+     * without displaying a separate zoom window.
+     */
+    bool isDirectMappingMode() const;
+    
+    /**
+     * Transform zoom window coordinates to page coordinates
+     */
+    PositionInputData transformZoomWindowCoords(double x, double y, GdkEvent* event);
+
+    /**
+     * Callback for drawing the zoom window content
+     */
+    static gboolean onZoomWindowDraw(GtkWidget* widget, cairo_t* cr, MainWindow* self);
+    
+    /**
+     * Callback for button press events in the zoom window
+     */
+    static gboolean onZoomWindowButtonPress(GtkWidget* widget, GdkEventButton* event, MainWindow* self);
+    
+    
+    /**
+     * Callback for button release events in the zoom window
+     */
+    static gboolean onZoomWindowButtonRelease(GtkWidget* widget, GdkEventButton* event, MainWindow* self);
+    
+    /**
+     * Callback for motion events in the zoom window
+     */
+    static gboolean onZoomWindowMotion(GtkWidget* widget, GdkEventMotion* event, MainWindow* self);
+    
+    /**
+     * Callback for key press events in the zoom window
+     */
+    static gboolean onZoomWindowKeyPress(GtkWidget* widget, GdkEventKey* event, MainWindow* self);
+
+    /**
+     * Get the modifier mask for indicator movement from settings
+     */
+    GdkModifierType getIndicatorMoveModifier() const;
+
+    /**
+     * Check if a keyboard event matches a configured shortcut
+     * @param event The key event to check
+     * @param shortcutSetting The name of the shortcut setting (e.g., "mapFullWindowShortcut")
+     * @return true if the event matches the shortcut
+     */
+    bool matchesShortcut(GdkEventKey* event, const std::string& shortcutSetting) const;
+
+    /**
+     * Get the configured key for a movement direction
+     * @param direction One of: "left", "right", "up", "down", "home", "end", "pageUp", "pageDown"
+     * @return The GDK keyval (lowercase) for the configured key
+     */
+    guint getMovementKey(const std::string& direction) const;
 };
+

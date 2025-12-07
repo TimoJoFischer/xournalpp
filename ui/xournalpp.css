@@ -213,3 +213,43 @@ label.setting-touch-indicator {
 label.setting-touch-indicator.pressed {
     background: radial-gradient(circle at center, red 0%, red 20%, alpha(red, .1) 60%, alpha(red, 0.) 100%);
 }
+
+/* Zoom Window Toolbar */
+#zoomWindowToolbar {
+    background-color: #1a1a1a;
+    background: #1a1a1a;
+    border-bottom: 1px solid #333;
+    min-height: 22px;
+    color: white;
+    padding: 2px 0;
+}
+
+#zoomWindowToolbar button {
+    padding: 2px 4px;
+    min-height: 18px;
+    min-width: 18px;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    color: white;
+}
+
+#zoomWindowToolbar button:hover {
+    background: rgba(255,255,255,0.15);
+}
+
+#zoomWindowToolbar button:checked {
+    background: rgba(255,255,255,0.25);
+    border-radius: 3px;
+}
+
+#zoomWindowToolbar button image {
+    color: white;
+    -gtk-icon-style: symbolic;
+}
+
+window.darkMode #zoomWindowToolbar {
+    background-color: #1a1a1a;
+    background: #1a1a1a;
+    border-bottom: 1px solid #333;
+}

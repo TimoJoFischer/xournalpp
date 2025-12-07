@@ -328,6 +328,22 @@ void XournalppCursor::updateCursor() {
         }
         gtk_widget_set_sensitive(xournal->getWidget(), !this->busy);
     }
+    
+    // Also update the zoom window cursor to match
+    GtkWidget* zoomWidget = win->getZoomWindowDrawingArea();
+    if (zoomWidget) {
+        GdkWindow* zoomWindow = gtk_widget_get_window(zoomWidget);
+        if (zoomWindow) {
+            if (cursor != nullptr) {
+                gdk_window_set_cursor(zoomWindow, cursor);
+            } else if (window) {
+                // Use the cursor from the main window
+                GdkCursor* mainCursor = gdk_window_get_cursor(window);
+                gdk_window_set_cursor(zoomWindow, mainCursor);
+            }
+        }
+    }
+    
     // Performance removal!
     // If this line is ever required, make sure this function is never called, when the cursor is not set.
     // gdk_display_sync(gdk_display_get_default());
@@ -567,6 +583,16 @@ void XournalppCursor::setCursor(guint cursorID) {
     this->currentCursor = cursorID;
     gdk_window_set_cursor(gtk_widget_get_window(xournal->getWidget()), cursor);
     gdk_window_set_cursor(window, cursor);
+    
+    // Also update the zoom window cursor to match
+    GtkWidget* zoomWidget = win->getZoomWindowDrawingArea();
+    if (zoomWidget) {
+        GdkWindow* zoomWindow = gtk_widget_get_window(zoomWidget);
+        if (zoomWindow) {
+            gdk_window_set_cursor(zoomWindow, cursor);
+        }
+    }
+    
     if (cursor) {
         g_object_unref(cursor);
     }

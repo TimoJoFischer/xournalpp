@@ -81,6 +81,99 @@ static void gtk_xournal_class_init(GtkXournalClass* cptr) {
     G_OBJECT_CLASS(cptr)->dispose = gtk_xournal_dispose;
 }
 
+void gtk_xournal_set_zoom_indicator(GtkWidget* widget, bool show, double x, double y, double width, double height) {
+    g_return_if_fail(widget != nullptr);
+    g_return_if_fail(GTK_IS_XOURNAL(widget));
+    
+    GtkXournal* xournal = GTK_XOURNAL(widget);
+    xournal->showZoomIndicator = show;
+    xournal->zoomIndicatorX = x;
+    xournal->zoomIndicatorY = y;
+    xournal->zoomIndicatorWidth = width;
+    xournal->zoomIndicatorHeight = height;
+    
+    gtk_widget_queue_draw(widget);
+}
+
+bool gtk_xournal_point_in_indicator(GtkWidget* widget, double x, double y) {
+    g_return_val_if_fail(widget != nullptr, false);
+    g_return_val_if_fail(GTK_IS_XOURNAL(widget), false);
+    
+    GtkXournal* xournal = GTK_XOURNAL(widget);
+    if (!xournal->showZoomIndicator) {
+        return false;
+    }
+    
+    return x >= xournal->zoomIndicatorX && 
+           x <= xournal->zoomIndicatorX + xournal->zoomIndicatorWidth &&
+           y >= xournal->zoomIndicatorY && 
+           y <= xournal->zoomIndicatorY + xournal->zoomIndicatorHeight;
+}
+
+bool gtk_xournal_point_in_indicator_corner(GtkWidget* widget, double x, double y) {
+    g_return_val_if_fail(widget != nullptr, false);
+    g_return_val_if_fail(GTK_IS_XOURNAL(widget), false);
+    
+    GtkXournal* xournal = GTK_XOURNAL(widget);
+    if (!xournal->showZoomIndicator) {
+        return false;
+    }
+    
+    // Size of the drag handle in the bottom-right corner
+    const double handleSize = 24.0;
+    
+    double cornerX = xournal->zoomIndicatorX + xournal->zoomIndicatorWidth - handleSize;
+    double cornerY = xournal->zoomIndicatorY + xournal->zoomIndicatorHeight - handleSize;
+    
+    return x >= cornerX && 
+           x <= xournal->zoomIndicatorX + xournal->zoomIndicatorWidth &&
+           y >= cornerY && 
+           y <= xournal->zoomIndicatorY + xournal->zoomIndicatorHeight;
+}
+
+void gtk_xournal_start_indicator_drag(GtkWidget* widget, double x, double y) {
+    g_return_if_fail(widget != nullptr);
+    g_return_if_fail(GTK_IS_XOURNAL(widget));
+    
+    GtkXournal* xournal = GTK_XOURNAL(widget);
+    xournal->indicatorDragging = true;
+    // Store offset from indicator top-left to click position
+    xournal->indicatorDragOffsetX = x - xournal->zoomIndicatorX;
+    xournal->indicatorDragOffsetY = y - xournal->zoomIndicatorY;
+}
+
+void gtk_xournal_update_indicator_drag(GtkWidget* widget, double x, double y) {
+    g_return_if_fail(widget != nullptr);
+    g_return_if_fail(GTK_IS_XOURNAL(widget));
+    
+    GtkXournal* xournal = GTK_XOURNAL(widget);
+    if (!xournal->indicatorDragging) {
+        return;
+    }
+    
+    // Calculate new indicator position (maintaining offset from click point)
+    xournal->zoomIndicatorX = x - xournal->indicatorDragOffsetX;
+    xournal->zoomIndicatorY = y - xournal->indicatorDragOffsetY;
+    
+    gtk_widget_queue_draw(widget);
+}
+
+void gtk_xournal_stop_indicator_drag(GtkWidget* widget) {
+    g_return_if_fail(widget != nullptr);
+    g_return_if_fail(GTK_IS_XOURNAL(widget));
+    
+    GtkXournal* xournal = GTK_XOURNAL(widget);
+    xournal->indicatorDragging = false;
+}
+
+bool gtk_xournal_is_indicator_dragging(GtkWidget* widget) {
+    g_return_val_if_fail(widget != nullptr, false);
+    g_return_val_if_fail(GTK_IS_XOURNAL(widget), false);
+    
+    GtkXournal* xournal = GTK_XOURNAL(widget);
+    return xournal->indicatorDragging;
+}
+
 auto gtk_xournal_get_visible_area(GtkWidget* widget, const XojPageView* p) -> xoj::util::Rectangle<double>* {
     g_return_val_if_fail(widget != nullptr, nullptr);
     g_return_val_if_fail(GTK_IS_XOURNAL(widget), nullptr);
@@ -304,6 +397,56 @@ static auto gtk_xournal_draw(GtkWidget* widget, cairo_t* cr) -> gboolean {
 
     if (recolor) {
         recolor->recolorCurrentCairoRegion(cr);
+    }
+
+    // Draw zoom window indicator rectangle
+    if (xournal->showZoomIndicator) {
+        cairo_save(cr);
+        
+        // Draw blue border rectangle
+        cairo_set_source_rgb(cr, 0.0, 0.4, 1.0);  // Blue color
+        cairo_set_line_width(cr, 2.0);
+        cairo_rectangle(cr, xournal->zoomIndicatorX, xournal->zoomIndicatorY,
+                        xournal->zoomIndicatorWidth, xournal->zoomIndicatorHeight);
+        cairo_stroke(cr);
+        
+        // Draw semi-transparent fill
+        cairo_set_source_rgba(cr, 0.0, 0.4, 1.0, 0.1);  // Light blue fill
+        cairo_rectangle(cr, xournal->zoomIndicatorX, xournal->zoomIndicatorY,
+                        xournal->zoomIndicatorWidth, xournal->zoomIndicatorHeight);
+        cairo_fill(cr);
+        
+        // Draw drag handle in bottom-right corner
+        const double handleSize = 24.0;
+        double handleX = xournal->zoomIndicatorX + xournal->zoomIndicatorWidth - handleSize;
+        double handleY = xournal->zoomIndicatorY + xournal->zoomIndicatorHeight - handleSize;
+        
+        // Filled corner triangle/area for the drag handle
+        cairo_set_source_rgba(cr, 0.0, 0.4, 1.0, 0.4);  // Slightly more opaque blue
+        cairo_move_to(cr, handleX + handleSize, handleY);
+        cairo_line_to(cr, handleX + handleSize, handleY + handleSize);
+        cairo_line_to(cr, handleX, handleY + handleSize);
+        cairo_close_path(cr);
+        cairo_fill(cr);
+        
+        // Draw diagonal lines in the corner to indicate it's draggable
+        cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);  // White lines
+        cairo_set_line_width(cr, 1.5);
+        
+        // Three diagonal lines
+        cairo_move_to(cr, handleX + handleSize - 6, handleY + handleSize);
+        cairo_line_to(cr, handleX + handleSize, handleY + handleSize - 6);
+        cairo_stroke(cr);
+        
+        cairo_move_to(cr, handleX + handleSize - 12, handleY + handleSize);
+        cairo_line_to(cr, handleX + handleSize, handleY + handleSize - 12);
+        cairo_stroke(cr);
+        
+        cairo_move_to(cr, handleX + handleSize - 18, handleY + handleSize);
+        cairo_line_to(cr, handleX + handleSize, handleY + handleSize - 18);
+        cairo_stroke(cr);
+        
+        cairo_restore(cr);
     }
 
     return true;

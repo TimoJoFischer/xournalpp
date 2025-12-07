@@ -138,6 +138,11 @@ void InputContext::connect(GtkWidget* pWidget, bool connectKeyboardHandler,
 auto InputContext::handle(GdkEvent* sourceEvent) -> bool {
     printDebug(sourceEvent);
 
+    // Call pre-event handler first (e.g., for zoom indicator dragging)
+    if (preEventHandler && preEventHandler(sourceEvent, preEventUserData)) {
+        return true;  // Event was handled by pre-event handler
+    }
+
     GdkDevice* sourceDevice = gdk_event_get_source_device(sourceEvent);
     if (sourceDevice == NULL) {
         return false;
@@ -320,4 +325,9 @@ void InputContext::printDebug(GdkEvent* event) {
 #endif  // DEBUG_INPUT_PRINT_ALL_MOTION_EVENTS
 #endif  // DEBUG_INPUT
 #endif  // DEBUG_INPUT_PRINT_EVENTS
+}
+
+void InputContext::setPreEventHandler(PreEventHandler handler, void* userData) {
+    this->preEventHandler = handler;
+    this->preEventUserData = userData;
 }

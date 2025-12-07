@@ -37,11 +37,22 @@ class DeviceTestingArea;
 class HandRecognition;
 
 class InputContext final {
+public:
+    /**
+     * Callback function type for pre-handling events (e.g., zoom indicator dragging)
+     * @param event The GDK event
+     * @param userData User-provided data
+     * @return true if the event was handled and should not be processed further
+     */
+    using PreEventHandler = bool (*)(GdkEvent* event, void* userData);
 
 private:
     XournalView* view;
     ScrollHandling* scrollHandling;
     Settings* settings;
+
+    PreEventHandler preEventHandler = nullptr;
+    void* preEventUserData = nullptr;
 
     gulong signal_id{0};
     std::unique_ptr<StylusInputHandler> stylusHandler;
@@ -110,4 +121,11 @@ public:
     void blockDevice(DeviceType deviceType);
     void unblockDevice(DeviceType deviceType);
     bool isBlocked(DeviceType deviceType);
+    
+    /**
+     * Set a pre-event handler that is called before normal input handling
+     * @param handler The handler function, or nullptr to remove
+     * @param userData User data to pass to the handler
+     */
+    void setPreEventHandler(PreEventHandler handler, void* userData);
 };

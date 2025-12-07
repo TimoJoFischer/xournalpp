@@ -729,6 +729,130 @@ void SettingsDialog::load() {
 
     this->latexPanel.load(settings->latexSettings);
     paletteTab.renderPaletteTab(this->control->getPalette().getFilePath());
+
+    // Zoom Window and Tablet Mapping Settings
+    SElement& zoomWindow = settings->getCustomElement("zoomWindow");
+    double zoomFactor = 1.5;
+    int zoomWidth = 560;
+    int zoomHeight = 360;
+    bool directMappingMode = false;
+    zoomWindow.getDouble("zoomFactor", zoomFactor);
+    zoomWindow.getInt("width", zoomWidth);
+    zoomWindow.getInt("height", zoomHeight);
+    zoomWindow.getBool("directMappingMode", directMappingMode);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(builder.get("spZoomWindowFactor")), zoomFactor);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(builder.get("spZoomWindowWidth")), zoomWidth);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(builder.get("spZoomWindowHeight")), zoomHeight);
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(builder.get("cbDirectMappingMode")), directMappingMode);
+
+    // Keyboard shortcuts for zoom window
+    string indicatorMoveModifier = "alt";
+    string toggleTabletMappingShortcut = "<Alt>m";
+    zoomWindow.getString("indicatorMoveModifier", indicatorMoveModifier);
+    zoomWindow.getString("toggleTabletMappingShortcut", toggleTabletMappingShortcut);
+    gtk_combo_box_set_active_id(GTK_COMBO_BOX(builder.get("cbIndicatorMoveModifier")), indicatorMoveModifier.c_str());
+    gtk_editable_set_text(GTK_EDITABLE(builder.get("txtToggleTabletMappingShortcut")), toggleTabletMappingShortcut.c_str());
+
+    // Movement keys (empty means use default arrow keys)
+    string keyLeft, keyRight, keyUp, keyDown;
+    zoomWindow.getString("movementKeyLeft", keyLeft);
+    zoomWindow.getString("movementKeyRight", keyRight);
+    zoomWindow.getString("movementKeyUp", keyUp);
+    zoomWindow.getString("movementKeyDown", keyDown);
+    gtk_editable_set_text(GTK_EDITABLE(builder.get("txtKeyLeft")), keyLeft.c_str());
+    gtk_editable_set_text(GTK_EDITABLE(builder.get("txtKeyRight")), keyRight.c_str());
+    gtk_editable_set_text(GTK_EDITABLE(builder.get("txtKeyUp")), keyUp.c_str());
+    gtk_editable_set_text(GTK_EDITABLE(builder.get("txtKeyDown")), keyDown.c_str());
+
+    // Tablet Mapping Settings (Linux KDE)
+    SElement& tabletMapping = settings->getCustomElement("tabletMapping");
+    
+    string kdeGroup, outputUuid;
+    tabletMapping.getString("linuxKDEGroup", kdeGroup);
+    tabletMapping.getString("linuxKDEOutputUuid", outputUuid);
+    gtk_editable_set_text(GTK_EDITABLE(builder.get("txtTabletKDEGroup")), kdeGroup.c_str());
+    gtk_editable_set_text(GTK_EDITABLE(builder.get("txtTabletOutputUuid")), outputUuid.c_str());
+
+    // Full window mapping values
+    double fullInputX = 0, fullInputY = 0, fullInputW = 1, fullInputH = 1;
+    double fullOutputX = 0, fullOutputY = 0, fullOutputW = 0.5, fullOutputH = 1;
+    tabletMapping.getDouble("linuxFullInputX", fullInputX);
+    tabletMapping.getDouble("linuxFullInputY", fullInputY);
+    tabletMapping.getDouble("linuxFullInputWidth", fullInputW);
+    tabletMapping.getDouble("linuxFullInputHeight", fullInputH);
+    tabletMapping.getDouble("linuxFullOutputX", fullOutputX);
+    tabletMapping.getDouble("linuxFullOutputY", fullOutputY);
+    tabletMapping.getDouble("linuxFullOutputWidth", fullOutputW);
+    tabletMapping.getDouble("linuxFullOutputHeight", fullOutputH);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(builder.get("spTabletFullInputX")), fullInputX);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(builder.get("spTabletFullInputY")), fullInputY);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(builder.get("spTabletFullInputWidth")), fullInputW);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(builder.get("spTabletFullInputHeight")), fullInputH);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(builder.get("spTabletFullOutputX")), fullOutputX);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(builder.get("spTabletFullOutputY")), fullOutputY);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(builder.get("spTabletFullOutputWidth")), fullOutputW);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(builder.get("spTabletFullOutputHeight")), fullOutputH);
+
+    // Zoom window mapping values
+    double zoomInputX = 0, zoomInputY = 0, zoomInputW = 0.773, zoomInputH = 1;
+    double zoomOutputX = 0.4, zoomOutputY = 0.8, zoomOutputW = 0.5, zoomOutputH = 1;
+    tabletMapping.getDouble("linuxZoomInputX", zoomInputX);
+    tabletMapping.getDouble("linuxZoomInputY", zoomInputY);
+    tabletMapping.getDouble("linuxZoomInputWidth", zoomInputW);
+    tabletMapping.getDouble("linuxZoomInputHeight", zoomInputH);
+    tabletMapping.getDouble("linuxZoomOutputX", zoomOutputX);
+    tabletMapping.getDouble("linuxZoomOutputY", zoomOutputY);
+    tabletMapping.getDouble("linuxZoomOutputWidth", zoomOutputW);
+    tabletMapping.getDouble("linuxZoomOutputHeight", zoomOutputH);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(builder.get("spTabletZoomInputX")), zoomInputX);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(builder.get("spTabletZoomInputY")), zoomInputY);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(builder.get("spTabletZoomInputWidth")), zoomInputW);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(builder.get("spTabletZoomInputHeight")), zoomInputH);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(builder.get("spTabletZoomOutputX")), zoomOutputX);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(builder.get("spTabletZoomOutputY")), zoomOutputY);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(builder.get("spTabletZoomOutputWidth")), zoomOutputW);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(builder.get("spTabletZoomOutputHeight")), zoomOutputH);
+
+    // Tablet Mapping Settings (Windows)
+    // Full window mapping values for Windows
+    double winFullInputX = 0, winFullInputY = 0, winFullInputW = 1, winFullInputH = 1;
+    double winFullOutputX = 0, winFullOutputY = 0, winFullOutputW = 0.5, winFullOutputH = 1;
+    tabletMapping.getDouble("windowsFullInputX", winFullInputX);
+    tabletMapping.getDouble("windowsFullInputY", winFullInputY);
+    tabletMapping.getDouble("windowsFullInputWidth", winFullInputW);
+    tabletMapping.getDouble("windowsFullInputHeight", winFullInputH);
+    tabletMapping.getDouble("windowsFullOutputX", winFullOutputX);
+    tabletMapping.getDouble("windowsFullOutputY", winFullOutputY);
+    tabletMapping.getDouble("windowsFullOutputWidth", winFullOutputW);
+    tabletMapping.getDouble("windowsFullOutputHeight", winFullOutputH);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(builder.get("spWinTabletFullInputX")), winFullInputX);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(builder.get("spWinTabletFullInputY")), winFullInputY);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(builder.get("spWinTabletFullInputWidth")), winFullInputW);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(builder.get("spWinTabletFullInputHeight")), winFullInputH);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(builder.get("spWinTabletFullOutputX")), winFullOutputX);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(builder.get("spWinTabletFullOutputY")), winFullOutputY);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(builder.get("spWinTabletFullOutputWidth")), winFullOutputW);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(builder.get("spWinTabletFullOutputHeight")), winFullOutputH);
+
+    // Zoom window mapping values for Windows
+    double winZoomInputX = 0, winZoomInputY = 0, winZoomInputW = 1, winZoomInputH = 1;
+    double winZoomOutputX = 0, winZoomOutputY = 0.5, winZoomOutputW = 0.5, winZoomOutputH = 0.5;
+    tabletMapping.getDouble("windowsZoomInputX", winZoomInputX);
+    tabletMapping.getDouble("windowsZoomInputY", winZoomInputY);
+    tabletMapping.getDouble("windowsZoomInputWidth", winZoomInputW);
+    tabletMapping.getDouble("windowsZoomInputHeight", winZoomInputH);
+    tabletMapping.getDouble("windowsZoomOutputX", winZoomOutputX);
+    tabletMapping.getDouble("windowsZoomOutputY", winZoomOutputY);
+    tabletMapping.getDouble("windowsZoomOutputWidth", winZoomOutputW);
+    tabletMapping.getDouble("windowsZoomOutputHeight", winZoomOutputH);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(builder.get("spWinTabletZoomInputX")), winZoomInputX);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(builder.get("spWinTabletZoomInputY")), winZoomInputY);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(builder.get("spWinTabletZoomInputWidth")), winZoomInputW);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(builder.get("spWinTabletZoomInputHeight")), winZoomInputH);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(builder.get("spWinTabletZoomOutputX")), winZoomOutputX);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(builder.get("spWinTabletZoomOutputY")), winZoomOutputY);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(builder.get("spWinTabletZoomOutputWidth")), winZoomOutputW);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(builder.get("spWinTabletZoomOutputHeight")), winZoomOutputH);
 }
 
 void SettingsDialog::save() {
@@ -1095,9 +1219,76 @@ void SettingsDialog::save() {
 
     this->latexPanel.save(settings->latexSettings);
 
+    // Zoom Window Settings
+    SElement& zoomWindow = settings->getCustomElement("zoomWindow");
+    zoomWindow.setDouble("zoomFactor", gtk_spin_button_get_value(GTK_SPIN_BUTTON(builder.get("spZoomWindowFactor"))));
+    zoomWindow.setInt("width", static_cast<int>(gtk_spin_button_get_value(GTK_SPIN_BUTTON(builder.get("spZoomWindowWidth")))));
+    zoomWindow.setInt("height", static_cast<int>(gtk_spin_button_get_value(GTK_SPIN_BUTTON(builder.get("spZoomWindowHeight")))));
+    zoomWindow.setBool("directMappingMode", gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(builder.get("cbDirectMappingMode"))));
+
+    // Keyboard shortcuts for zoom window
+    const gchar* modifierId = gtk_combo_box_get_active_id(GTK_COMBO_BOX(builder.get("cbIndicatorMoveModifier")));
+    zoomWindow.setString("indicatorMoveModifier", modifierId ? modifierId : "alt");
+    zoomWindow.setString("toggleTabletMappingShortcut", gtk_editable_get_text(GTK_EDITABLE(builder.get("txtToggleTabletMappingShortcut"))));
+
+    // Movement keys (store exactly as entered, empty means use defaults)
+    zoomWindow.setString("movementKeyLeft", gtk_editable_get_text(GTK_EDITABLE(builder.get("txtKeyLeft"))));
+    zoomWindow.setString("movementKeyRight", gtk_editable_get_text(GTK_EDITABLE(builder.get("txtKeyRight"))));
+    zoomWindow.setString("movementKeyUp", gtk_editable_get_text(GTK_EDITABLE(builder.get("txtKeyUp"))));
+    zoomWindow.setString("movementKeyDown", gtk_editable_get_text(GTK_EDITABLE(builder.get("txtKeyDown"))));
+
+    // Tablet Mapping Settings (Linux KDE)
+    SElement& tabletMapping = settings->getCustomElement("tabletMapping");
+    tabletMapping.setString("linuxKDEGroup", gtk_editable_get_text(GTK_EDITABLE(builder.get("txtTabletKDEGroup"))));
+    tabletMapping.setString("linuxKDEOutputUuid", gtk_editable_get_text(GTK_EDITABLE(builder.get("txtTabletOutputUuid"))));
+
+    // Full window mapping
+    tabletMapping.setDouble("linuxFullInputX", gtk_spin_button_get_value(GTK_SPIN_BUTTON(builder.get("spTabletFullInputX"))));
+    tabletMapping.setDouble("linuxFullInputY", gtk_spin_button_get_value(GTK_SPIN_BUTTON(builder.get("spTabletFullInputY"))));
+    tabletMapping.setDouble("linuxFullInputWidth", gtk_spin_button_get_value(GTK_SPIN_BUTTON(builder.get("spTabletFullInputWidth"))));
+    tabletMapping.setDouble("linuxFullInputHeight", gtk_spin_button_get_value(GTK_SPIN_BUTTON(builder.get("spTabletFullInputHeight"))));
+    tabletMapping.setDouble("linuxFullOutputX", gtk_spin_button_get_value(GTK_SPIN_BUTTON(builder.get("spTabletFullOutputX"))));
+    tabletMapping.setDouble("linuxFullOutputY", gtk_spin_button_get_value(GTK_SPIN_BUTTON(builder.get("spTabletFullOutputY"))));
+    tabletMapping.setDouble("linuxFullOutputWidth", gtk_spin_button_get_value(GTK_SPIN_BUTTON(builder.get("spTabletFullOutputWidth"))));
+    tabletMapping.setDouble("linuxFullOutputHeight", gtk_spin_button_get_value(GTK_SPIN_BUTTON(builder.get("spTabletFullOutputHeight"))));
+
+    // Zoom window mapping
+    tabletMapping.setDouble("linuxZoomInputX", gtk_spin_button_get_value(GTK_SPIN_BUTTON(builder.get("spTabletZoomInputX"))));
+    tabletMapping.setDouble("linuxZoomInputY", gtk_spin_button_get_value(GTK_SPIN_BUTTON(builder.get("spTabletZoomInputY"))));
+    tabletMapping.setDouble("linuxZoomInputWidth", gtk_spin_button_get_value(GTK_SPIN_BUTTON(builder.get("spTabletZoomInputWidth"))));
+    tabletMapping.setDouble("linuxZoomInputHeight", gtk_spin_button_get_value(GTK_SPIN_BUTTON(builder.get("spTabletZoomInputHeight"))));
+    tabletMapping.setDouble("linuxZoomOutputX", gtk_spin_button_get_value(GTK_SPIN_BUTTON(builder.get("spTabletZoomOutputX"))));
+    tabletMapping.setDouble("linuxZoomOutputY", gtk_spin_button_get_value(GTK_SPIN_BUTTON(builder.get("spTabletZoomOutputY"))));
+    tabletMapping.setDouble("linuxZoomOutputWidth", gtk_spin_button_get_value(GTK_SPIN_BUTTON(builder.get("spTabletZoomOutputWidth"))));
+    tabletMapping.setDouble("linuxZoomOutputHeight", gtk_spin_button_get_value(GTK_SPIN_BUTTON(builder.get("spTabletZoomOutputHeight"))));
+
+    // Tablet Mapping Settings (Windows)
+    // Full window mapping
+    tabletMapping.setDouble("windowsFullInputX", gtk_spin_button_get_value(GTK_SPIN_BUTTON(builder.get("spWinTabletFullInputX"))));
+    tabletMapping.setDouble("windowsFullInputY", gtk_spin_button_get_value(GTK_SPIN_BUTTON(builder.get("spWinTabletFullInputY"))));
+    tabletMapping.setDouble("windowsFullInputWidth", gtk_spin_button_get_value(GTK_SPIN_BUTTON(builder.get("spWinTabletFullInputWidth"))));
+    tabletMapping.setDouble("windowsFullInputHeight", gtk_spin_button_get_value(GTK_SPIN_BUTTON(builder.get("spWinTabletFullInputHeight"))));
+    tabletMapping.setDouble("windowsFullOutputX", gtk_spin_button_get_value(GTK_SPIN_BUTTON(builder.get("spWinTabletFullOutputX"))));
+    tabletMapping.setDouble("windowsFullOutputY", gtk_spin_button_get_value(GTK_SPIN_BUTTON(builder.get("spWinTabletFullOutputY"))));
+    tabletMapping.setDouble("windowsFullOutputWidth", gtk_spin_button_get_value(GTK_SPIN_BUTTON(builder.get("spWinTabletFullOutputWidth"))));
+    tabletMapping.setDouble("windowsFullOutputHeight", gtk_spin_button_get_value(GTK_SPIN_BUTTON(builder.get("spWinTabletFullOutputHeight"))));
+
+    // Zoom window mapping
+    tabletMapping.setDouble("windowsZoomInputX", gtk_spin_button_get_value(GTK_SPIN_BUTTON(builder.get("spWinTabletZoomInputX"))));
+    tabletMapping.setDouble("windowsZoomInputY", gtk_spin_button_get_value(GTK_SPIN_BUTTON(builder.get("spWinTabletZoomInputY"))));
+    tabletMapping.setDouble("windowsZoomInputWidth", gtk_spin_button_get_value(GTK_SPIN_BUTTON(builder.get("spWinTabletZoomInputWidth"))));
+    tabletMapping.setDouble("windowsZoomInputHeight", gtk_spin_button_get_value(GTK_SPIN_BUTTON(builder.get("spWinTabletZoomInputHeight"))));
+    tabletMapping.setDouble("windowsZoomOutputX", gtk_spin_button_get_value(GTK_SPIN_BUTTON(builder.get("spWinTabletZoomOutputX"))));
+    tabletMapping.setDouble("windowsZoomOutputY", gtk_spin_button_get_value(GTK_SPIN_BUTTON(builder.get("spWinTabletZoomOutputY"))));
+    tabletMapping.setDouble("windowsZoomOutputWidth", gtk_spin_button_get_value(GTK_SPIN_BUTTON(builder.get("spWinTabletZoomOutputWidth"))));
+    tabletMapping.setDouble("windowsZoomOutputHeight", gtk_spin_button_get_value(GTK_SPIN_BUTTON(builder.get("spWinTabletZoomOutputHeight"))));
+
     settings->transactionEnd();
 
     this->control->getWindow()->setGtkTouchscreenScrollingForDeviceMapping();
+
+    // Reload tablet mapping configuration to apply any changes
+    this->control->getWindow()->loadTabletMappingConfig();
 
     this->control->initButtonTool();
     this->control->getWindow()->getXournal()->onSettingsChanged();
